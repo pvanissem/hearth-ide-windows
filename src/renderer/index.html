@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:">
+<title>Hearth IDE</title>
+<link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="inbox">
+    <header><span class="logo">Hearth</span><button id="btn-start" class="primary">+ Start agent</button></header>
+    <div id="sandbox-banner" hidden></div>
+    <ul id="session-list"></ul>
+    <footer><button id="btn-settings" class="ghost">Settings</button></footer>
+  </aside>
+
+  <main id="center">
+    <nav class="tabs" id="center-tabs">
+      <button data-tab="agent" class="active">Agent</button>
+      <button data-tab="editor">Editor <span id="editor-file"></span></button>
+      <span class="spacer"></span><span id="session-meta"></span>
+    </nav>
+    <section id="pane-agent" class="pane active"><div id="terminals"></div><div id="empty" class="empty">Start an agent to begin.</div></section>
+    <section id="pane-editor" class="pane">
+      <div id="editor-bar"><button id="btn-save" class="primary" disabled>Save (Ctrl+S)</button><span id="editor-status"></span></div>
+      <div id="monaco"></div>
+    </section>
+  </main>
+
+  <aside id="inspector">
+    <nav class="tabs" id="insp-tabs">
+      <button data-tab="files" class="active">Files</button>
+      <button data-tab="git">Git <span id="git-count"></span></button>
+    </nav>
+    <section id="insp-files" class="pane active"><div id="tree"></div></section>
+    <section id="insp-git" class="pane">
+      <div id="git-head"></div>
+      <div id="git-files"></div>
+      <textarea id="commit-msg" placeholder="Commit message"></textarea>
+      <div class="row"><button id="btn-commit" class="primary">Commit staged</button><button id="btn-refresh" class="ghost">Refresh</button></div>
+      <pre id="git-diff"></pre>
+      <h4>History</h4><ul id="git-log"></ul>
+    </section>
+  </aside>
+</div>
+
+<dialog id="dlg-start">
+  <form method="dialog">
+    <h3>Start agent</h3>
+    <label>Agent <select id="start-kind"></select></label>
+    <label>Folder <span class="row"><input id="start-dir" readonly placeholder="Choose a project folder"><button type="button" id="btn-pick">Browse...</button></span></label>
+    <p id="start-hint" class="hint"></p>
+    <div class="row end"><button value="cancel">Cancel</button><button id="btn-go" class="primary" value="go">Start</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog">
+    <h3>Settings</h3>
+    <div id="env-info" class="hint"></div>
+    <label>Extra allowed domains (one per line) <textarea id="set-domains" rows="4"></textarea></label>
+    <label>Extra open ports (comma separated) <input id="set-ports"></label>
+    <label class="check"><input type="checkbox" id="set-ssh"> Git over SSH (read ~/.ssh in the Git sandbox)</label>
+    <label class="check danger"><input type="checkbox" id="set-unsandboxed"> Allow running agents WITHOUT a sandbox when WSL2/nono is missing</label>
+    <div class="row end"><button value="cancel">Cancel</button><button id="btn-save-settings" class="primary" value="save">Save</button></div>
+  </form>
+</dialog>
+
+<script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

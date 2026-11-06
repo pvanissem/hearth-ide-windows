@@ -1,0 +1,33 @@
+{
+  "name": "hearth-ide-windows",
+  "version": "0.1.0",
+  "description": "Hearth IDE for Windows - sandboxed AI coding agents, inbox, editor and Git in one window",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "io.github.pvanissem.hearth-windows",
+    "productName": "Hearth IDE",
+    "files": [
+      "src/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron": "^45.2.3",
+    "monaco-editor": "^0.57.0",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.18.0"
+  }
+}
