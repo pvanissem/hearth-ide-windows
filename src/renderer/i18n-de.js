@@ -1,6 +1,12 @@
 'use strict';
 // German texts. The key is the English source text (see scripts/i18n-strings.js --missing).
 I18n.register('de', {
+  // design pass
+  'Agents': 'Agenten', 'Needs attention': 'Braucht Aufmerksamkeit', 'No agents yet.': 'Noch keine Agenten.', 'Search everywhere': 'Überall suchen', 'Stop agent': 'Agent stoppen',
+  '{n} sessions with activity, results, questions or errors.': '{n} Sitzungen mit Aktivität, Ergebnissen, Rückfragen oder Fehlern.', '{n} active': '{n} aktiv',
+  'now': 'jetzt', '{n} s ago': 'vor {n} s', '{n} min ago': 'vor {n} min', '{n} h ago': 'vor {n} h', 'No sandbox': 'Keine Sandbox',
+  'Filter': 'Filter', 'Local': 'Lokal', 'Remote': 'Remote', 'No upstream': 'Kein Upstream', 'Recent commits': 'Letzte Commits', 'No commits yet.': 'Noch keine Commits.',
+  'Working tree clean.': 'Keine Änderungen.', 'Hearth, Hearth Light, Darcula and Storm also colour the editor, the syntax and the terminals.': 'Hearth, Hearth Light, Darcula und Storm färben auch Editor, Syntax und Terminals.',
   // inbox, start
   '+ Start agent': '+ Agent starten', 'Start agent': 'Agent starten', 'Start an agent to begin.': 'Starte einen Agenten, um loszulegen.',
   'Search': 'Suchen', 'Search everywhere (Shift Shift, Ctrl+K)': 'Überall suchen (Shift Shift, Strg+K)', 'Settings': 'Einstellungen',

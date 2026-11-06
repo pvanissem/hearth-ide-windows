@@ -25,7 +25,8 @@ architecture, build tasks and CI/CD.
 | **Architecture**: Mermaid diagrams from Markdown / `.mmd` | yes | yes |
 | **Build & Deployment**: npm/pnpm/yarn scripts, Maven (+ Spring Boot), Gradle, Go, Cargo, Make, `.hearth/tasks.json`; run in the sandbox | yes | yes |
 | **CI/CD**: GitHub Actions + GitLab pipelines, jobs, logs, retry, cancel, run | yes | yes |
-| Themes: **System, Hearth Light, Darcula, Storm** (panes, editor, syntax, terminals) | yes | yes |
+| Themes: **System, Hearth, Hearth Light, Darcula, Storm** (panes, editor, syntax, terminals); "System" follows Windows (Hearth by night, Hearth Light by day) | yes | yes |
+| Look: brand fonts (Bricolage Grotesque, Hanken Grotesk, Azeret Mono), line icons, session cards with status and a live summary line, "needs attention" section, chat header with status and sandbox badge, diff stats, branch cards, task cards, Windows 11 title bar with Mica | SwiftUI | yes (Electron, same palette as DESIGN.md) |
 | **German and English** UI | yes | yes |
 | Credentials: CI tokens (read/write) and environment variables for agents, encrypted with DPAPI | Keychain, nono proxy | DPAPI; variables are visible to the agent |
 | Update check | yes | checks GitHub releases (no auto-install) |

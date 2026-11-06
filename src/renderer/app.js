@@ -13,6 +13,18 @@ const errMsg = (e) => String((e && e.message) || e).replace(/^Error invoking rem
 const cur = () => state.sessions.get(state.selected) || null;
 const base = (p) => String(p).split(/[\\/]/).pop();
 const fire = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }));
+/** Fill <i data-ico="name" data-size="16"> placeholders with the SVG icon. */
+function hydrateIcons(root = document) {
+  for (const n of root.querySelectorAll('i[data-ico]')) { n.outerHTML = Icons.html(n.dataset.ico, Number(n.dataset.size) || 16); }
+}
+const ago = (ts) => {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 10) return t('now');
+  if (s < 90) return t('{n} s ago', { n: s });
+  if (s < 5400) return t('{n} min ago', { n: Math.round(s / 60) });
+  return t('{n} h ago', { n: Math.round(s / 3600) });
+};
+const plainLine = (data) => data.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
 
 const state = { sessions: new Map(), terms: new Map(), selected: null, env: null, settings: null, editor: null, docs: new Map(), active: null, zoom: 0 };
 const STATUS = { starting: 'Starting', running: 'Running', 'needs-input': 'Needs input', idle: 'Idle', done: 'Done', failed: 'Failed' };
@@ -31,31 +43,67 @@ const showCenter = (tab) => document.querySelector(`#center-tabs [data-tab="${ta
 const showInspector = (tab) => document.querySelector(`#insp-tabs [data-tab="${tab}"]`).click();
 
 // ---------- inbox ----------
+const PILL = { starting: ['', 'Starting'], running: ['run', 'Running'], 'needs-input': ['warn', 'Needs input'], idle: ['', 'Idle'], done: ['ok', 'Done'], failed: ['bad', 'Failed'] };
+/** A session "needs attention" when it asks something, failed, or finished and has not been looked at yet. */
+const needsAttention = (s) => s.status === 'needs-input' || s.status === 'failed' || (s.status === 'done' && !s.seen);
+
+function sessionCard(s) {
+  const [cls, label] = PILL[s.status] || ['', s.status];
+  const summary = s.last || '';
+  const card = el('li', { class: `card ${s.id === state.selected ? 'sel' : ''} ${needsAttention(s) ? 'attn' : ''}` },
+    el('span', { class: 'tile' }),
+    el('div', { style: 'min-width:0' },
+      el('div', { class: 'ttl' }, el('span', { class: 't' }, s.title), el('span', { class: `pill ${cls}` }, t(label))),
+      el('div', { class: 's' }, `${s.name} · ${s.directory}`),
+      summary ? el('div', { class: 'sum' }, summary) : '',
+      el('div', { class: 's' }, `${s.sandboxed ? t('sandbox') : t('NO SANDBOX')} · ${ago(s.lastActivity || s.started)}`)));
+  card.firstChild.innerHTML = Icons.html(Icons.agent(s.kind), 16);
+  card.addEventListener('click', () => select(s.id));
+  card.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(t('Close "{name}"?', { name: `${s.name} - ${s.title}` }))) closeSession(s.id); });
+  return card;
+}
+
 function renderInbox() {
-  const ul = $('#session-list');
-  ul.replaceChildren();
   const list = [...state.sessions.values()].sort((a, b) => b.started - a.started);
-  for (const s of list) {
-    const li = el('li', { class: s.id === state.selected ? 'sel' : '' },
-      el('span', { class: `dot ${s.status}` }),
-      el('div', {}, el('div', { class: 't' }, s.name), el('div', { class: 's' }, `${s.title} - ${t(STATUS[s.status] || s.status)}`)),
-      el('span', { class: `tag ${s.sandboxed ? '' : 'raw'}` }, s.sandboxed ? t('sandbox') : t('NO SANDBOX')));
-    li.addEventListener('click', () => select(s.id));
-    li.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(t('Close "{name}"?', { name: `${s.name} - ${s.title}` }))) closeSession(s.id); });
-    ul.append(li);
-  }
-  $('#empty').hidden = state.sessions.size > 0;
+  const attn = list.filter(needsAttention);
+  const rest = list.filter((s) => !needsAttention(s));
+  $('#attn-wrap').hidden = attn.length === 0;
+  $('#attn-count').textContent = String(attn.length);
+  $('#attn-sub').textContent = t('{n} sessions with activity, results, questions or errors.', { n: attn.length });
+  $('#attn-list').replaceChildren(...attn.map(sessionCard));
+  $('#session-list').replaceChildren(...rest.map(sessionCard));
+  const active = list.filter((s) => s.status === 'running' || s.status === 'starting').length;
+  $('#agents-count').textContent = list.length ? `(${t('{n} active', { n: active })})` : '';
+  $('#empty-inbox').hidden = list.length > 0;
+  $('#empty').hidden = list.length > 0 ? true : false;
   const sel = cur();
   $('#session-meta').textContent = sel ? sel.directory : '';
   const needs = list.filter((s) => s.status === 'needs-input').length;
   document.title = needs ? `(${needs}) Hearth IDE` : 'Hearth IDE';
+  renderChatHead();
 }
+
+function renderChatHead() {
+  const s = cur();
+  $('#chat-head').hidden = !s;
+  if (!s) return;
+  const [cls, label] = PILL[s.status] || ['', s.status];
+  $('#ch-icon').innerHTML = Icons.html(Icons.agent(s.kind), 17);
+  $('#ch-title').textContent = s.title;
+  $('#ch-sub').textContent = `${s.name} · ${s.directory}`;
+  const st = $('#ch-status'); st.className = `pill ${cls}`; st.textContent = t(label);
+  const sb = $('#ch-sandbox'); sb.className = `pill ${s.sandboxed ? 'ok' : 'raw'}`; sb.innerHTML = Icons.html('shield', 12) + (s.sandboxed ? t('sandbox') : t('NO SANDBOX'));
+  $('#ch-stop').disabled = s.status === 'done' || s.status === 'failed';
+}
+$('#ch-stop').addEventListener('click', () => { const s = cur(); if (s) window.hearth.stop(s.id); });
+$('#btn-start2').addEventListener('click', () => $('#btn-start').click());
+setInterval(() => { if (state.sessions.size) renderInbox(); }, 30000);   // "2 min ago" stays current
 
 function select(id) {
   state.selected = id;
   for (const [tid, term] of state.terms) term.host.classList.toggle('active', tid === id);
   const s = cur();
-  if (s) loadTree(s.directory);
+  if (s) { s.seen = true; loadTree(s.directory); }
   renderInbox();
   fitCurrent();
   fire('hearth:select', s);
@@ -91,12 +139,22 @@ function fitCurrent() {
 }
 new ResizeObserver(fitCurrent).observe($('#terminals'));
 
-window.hearth.onData(({ id, data }) => state.terms.get(id)?.term.write(data));
-window.hearth.onStatus(({ id, status }) => { const s = state.sessions.get(id); if (s) { s.status = status; renderInbox(); notify(s); } });
+let inboxTimer = null;
+const renderInboxSoon = () => { if (!inboxTimer) inboxTimer = setTimeout(() => { inboxTimer = null; renderInbox(); }, 1200); };
+window.hearth.onData(({ id, data }) => {
+  state.terms.get(id)?.term.write(data);
+  const s = state.sessions.get(id);
+  if (!s) return;
+  s.lastActivity = Date.now();
+  // The card shows the agent's latest line, so the inbox says what is going on without opening the chat.
+  const line = plainLine(data).split(/\r?\n|\r/).map((l) => l.trim()).filter((l) => l.length > 2 && /[\p{L}\p{N}]/u.test(l) && !/^(PS )?[A-Za-z]:\\[^>]*>\s*$/.test(l) && !/^[$>%#]\s*$/.test(l)).pop();
+  if (line) { s.last = line.slice(0, 140); renderInboxSoon(); }
+});
+window.hearth.onStatus(({ id, status }) => { const s = state.sessions.get(id); if (s) { s.status = status; if (id === state.selected && status === 'done') s.seen = true; renderInbox(); notify(s); } });
 window.hearth.onExit(({ id, code }) => {
   const s = state.sessions.get(id);
   state.terms.get(id)?.term.write(`\r\n\x1b[2m[${t('process exited with code {code}', { code })}]\x1b[0m\r\n`);
-  if (s) { s.status = code === 0 ? 'done' : 'failed'; renderInbox(); }
+  if (s) { s.status = code === 0 ? 'done' : 'failed'; if (id === state.selected && code === 0) s.seen = true; renderInbox(); }
 });
 function notify(s) {
   if (s.status !== 'needs-input' || document.hasFocus() || !('Notification' in window)) return;
@@ -146,7 +204,9 @@ async function showSandboxState() {
   const ok = Boolean(state.env.backend);
   b.hidden = false;
   b.className = ok ? 'ok' : '';
-  b.textContent = ok ? (state.env.backend === 'native' ? t('Sandbox ready (Windows AppContainer, no install needed)') : t('Sandbox ready (WSL2 {distro} + nono)', { distro: state.env.distro })) : t('No sandbox: {reason}', { reason: state.env.reason });
+  const full = ok ? (state.env.backend === 'native' ? t('Sandbox ready (Windows AppContainer, no install needed)') : t('Sandbox ready (WSL2 {distro} + nono)', { distro: state.env.distro })) : t('No sandbox: {reason}', { reason: state.env.reason });
+  b.title = full;
+  b.innerHTML = Icons.html('shield', 13) + `<span>${ok ? (state.env.backend === 'native' ? 'AppContainer' : 'WSL2 · nono') : t('No sandbox')}</span>`;
 }
 
 // ---------- file tree ----------
@@ -160,20 +220,28 @@ async function dirNode(dir, open) {
   const children = el('div', { class: 'children' });
   let loaded = false; let isOpen = false;
   const toggle = async () => {
-    isOpen = !isOpen; caret.textContent = isOpen ? 'v' : '>';
+    isOpen = !isOpen;
+    caret.innerHTML = Icons.html(isOpen ? 'chevron-down' : 'chevron-right', 13);
+    folder.innerHTML = Icons.html(isOpen ? 'folder-open' : 'folder', 15);
     children.hidden = !isOpen;
     if (isOpen && !loaded) {
       loaded = true;
       try {
         for (const e of await window.hearth.list(dir)) {
           if (e.dir) children.append(await dirNode(e.path, false));
-          else { const n = el('div', { class: 'node' }, el('span', { class: 'caret' }, ''), e.name); n.addEventListener('click', () => openFile(e.path)); children.append(n); }
+          else {
+            const n = el('div', { class: 'node' }, el('span', { class: 'caret' }), el('span', {}), e.name);
+            n.children[1].innerHTML = Icons.html(Icons.forFile(e.name), 15);
+            n.addEventListener('click', () => openFile(e.path)); children.append(n);
+          }
         }
       } catch (err) { children.append(el('div', { class: 'hint' }, errMsg(err))); }
     }
   };
-  const caret = el('span', { class: 'caret' }, '>');
-  const label = el('div', { class: 'node' }, caret, base(dir) || dir);
+  const caret = el('span', { class: 'caret' });
+  const folder = el('span', {});
+  caret.innerHTML = Icons.html('chevron-right', 13); folder.innerHTML = Icons.html('folder', 15);
+  const label = el('div', { class: 'node dir' }, caret, folder, base(dir) || dir);
   label.addEventListener('click', toggle);
   wrap.append(label, children);
   children.hidden = true;
@@ -219,7 +287,8 @@ function renderDocs() {
   for (const [file, d] of state.docs) {
     const b = el('button', { class: `doc ${file === state.active ? 'active' : ''}`, title: file }, base(file) + (d.dirty ? ' *' : ''));
     b.addEventListener('click', () => activateDoc(file));
-    const x = el('button', { class: 'ghost x', title: t('Close') }, 'x');
+    const x = el('button', { class: 'ib x', title: t('Close') });
+    x.innerHTML = Icons.html('x', 13);
     x.addEventListener('click', (ev) => { ev.stopPropagation(); closeDoc(file); });
     tabs.append(el('span', { class: 'doc-wrap' }, b, x));
   }
@@ -313,10 +382,14 @@ document.addEventListener('hearth:lang', () => { renderInbox(); if (state.env) s
 
 // ---------- startup ----------
 (async () => {
+  hydrateIcons();
   state.settings = await window.hearth.getSettings();
+  Themes.onChange((_name, p) => {
+    for (const { term } of state.terms.values()) term.options.theme = Themes.terminalTheme();
+    window.hearth.setTitleBar(p.window, p.editorForeground);       // native caption buttons follow the theme
+  });
   Themes.apply(state.settings.theme);
   I18n.set(state.settings.language);
-  Themes.onChange(() => { for (const { term } of state.terms.values()) term.options.theme = Themes.terminalTheme(); });
   await showSandboxState();
   renderInbox();
   fire('hearth:ready');

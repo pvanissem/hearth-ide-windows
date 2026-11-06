@@ -32,7 +32,7 @@
     },
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false
+      "icon": "build/icon.png"
     },
     "extraResources": [
       {

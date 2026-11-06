@@ -355,6 +355,10 @@ test('git: branch list parsing and ref validation', () => {
   assert.deepEqual(b.map((x) => [x.name, x.current, x.remote]), [['main', true, false], ['feature/x', false, false], ['origin/main', false, true]]);
   for (const ok of ['main', 'feature/login-2', 'release-1.2.3']) assert.ok(git.validRef(ok), ok);
   for (const bad of ['-D', '--force', 'a..b', 'x/', 'x.lock', 'a b', 'a;rm', '', '$(x)']) assert.ok(!git.validRef(bad), bad);
+  const rich = git.parseBranches('main\t*\torigin/main\tlocal\t5 minutes ago\tFirst: the beginning\n')[0];
+  assert.deepEqual([rich.date, rich.subject], ['5 minutes ago', 'First: the beginning']);
+  assert.deepEqual(git.parseNumstat('3\t1\tsrc/a.js\n-\t-\timg/x.png\n2\t0\tsrc/{old => new}/b.js\n5\t5\tsrc/a.js\n'),
+    { 'src/a.js': { add: 8, del: 6 }, 'img/x.png': { add: 0, del: 0 }, 'src/new/b.js': { add: 2, del: 0 } });
   assert.deepEqual(git.parseStashes('stash@{0}\x1fWIP on main\nstash@{1}\x1fexperiment\n'), [{ ref: 'stash@{0}', subject: 'WIP on main' }, { ref: 'stash@{1}', subject: 'experiment' }]);
 });
 

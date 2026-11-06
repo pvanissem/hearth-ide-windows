@@ -60,7 +60,10 @@ function publicSession(s) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1600, height: 960, minWidth: 1000, minHeight: 600, backgroundColor: '#1e1f22', title: 'Hearth IDE',
+    width: 1600, height: 960, minWidth: 1000, minHeight: 600, backgroundColor: '#0e0a12', title: 'Hearth IDE',
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon-256.png'),
+    // Own title bar (the renderer draws it); Windows draws the caption buttons over its right end. Mica shows through the sidebar.
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#0e0a12', symbolColor: '#e9dfe6', height: 40 }, backgroundMaterial: 'mica',
     // backgroundThrottling off: agents keep producing output (and statuses, notifications) while the window is behind others.
     webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
@@ -76,6 +79,12 @@ ipcMain.handle('settings:get', () => settings.load());
 ipcMain.handle('settings:set', (_e, next) => settings.save(next));
 ipcMain.handle('agents:list', () => Object.entries(AGENTS).map(([id, a]) => ({ id, name: a.name, install: a.install, login: Boolean(a.login) })));
 ipcMain.handle('app:version', () => app.getVersion());
+// The renderer tells us its theme colours so the native caption buttons match.
+ipcMain.handle('win:theme', (_e, { bg, fg }) => {
+  const hex = /^#[0-9a-f]{6}$/i;
+  if (!win || !hex.test(bg) || !hex.test(fg)) return;
+  try { win.setTitleBarOverlay({ color: bg, symbolColor: fg, height: 40 }); win.setBackgroundColor(bg); } catch { /* not supported */ }
+});
 ipcMain.handle('app:open', (_e, url) => { if (/^https:\/\/[^\s]+$/.test(String(url))) return shell.openExternal(url); throw new Error('Only https links can be opened'); });
 ipcMain.handle('app:checkUpdate', async () => updates.check(app.getVersion(), { token: creds.tokenFor('github.com', false) }).catch((e) => ({ error: plainError(e) })));
 
@@ -187,7 +196,7 @@ ipcMain.handle('fs:write', async (_e, { file, content }) => {
 
 // ---- git (workspace only) ----
 const gitOp = (fn) => async (_e, dir, ...rest) => fn(requireWorkspace(dir), ...rest);
-const names = ['isRepo', 'status', 'diff', 'stage', 'unstage', 'commit', 'log', 'branches', 'checkout', 'createBranch', 'fetch', 'pull', 'push', 'stageAll', 'unstageAll',
+const names = ['isRepo', 'status', 'numstat', 'diff', 'stage', 'unstage', 'commit', 'log', 'branches', 'checkout', 'createBranch', 'fetch', 'pull', 'push', 'stageAll', 'unstageAll',
   'merge', 'mergeAbort', 'mergeInProgress', 'remoteUrl', 'stashList', 'stashSave', 'stashApply', 'stashPop', 'stashDrop'];
 for (const n of names) ipcMain.handle('git:' + n, gitOp((d, ...a) => git[n](d, ...a)));
 
@@ -289,6 +298,7 @@ async function smoke() {
   app.exit(0);
 }
 
+app.setAppUserModelId('io.github.pvanissem.hearth-windows');
 app.whenReady().then(() => { createWindow(); if (process.env.HEARTH_SMOKE) smoke(); });
 
 // Leave no AppContainer grants behind, also when the app is closed or killed by a smoke test.

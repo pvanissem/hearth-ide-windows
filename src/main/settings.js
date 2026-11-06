@@ -17,7 +17,7 @@ function sanitize(raw) {
   s.language = s.language === 'de' ? 'de' : 'en';
   s.backend = s.backend === 'wsl' ? 'wsl' : 'auto';
   s.network = s.network === 'none' ? 'none' : 'internet';
-  s.theme = ['system', 'hearthLight', 'darcula', 'storm'].includes(s.theme) ? s.theme : 'system';
+  s.theme = ['system', 'hearth', 'hearthLight', 'darcula', 'storm'].includes(s.theme) ? s.theme : 'system';
   s.journal = s.journal !== false;
   return s;
 }

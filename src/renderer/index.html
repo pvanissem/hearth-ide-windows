@@ -5,29 +5,54 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
 <title>Hearth IDE</title>
 <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header id="titlebar">
+  <div class="brand"><img src="assets/icon-64.png" alt=""><span>Hearth <b>IDE</b></span></div>
+  <button id="btn-search" class="find" data-i18n-title="Search everywhere (Shift Shift, Ctrl+K)"><i data-ico="search" data-size="15"></i><span data-i18n>Search everywhere</span><kbd>Shift Shift</kbd></button>
+  <span class="gap"></span>
+</header>
+
 <div id="app">
   <aside id="inbox">
-    <header><span class="logo">Hearth</span><button id="btn-start" class="primary" data-i18n>+ Start agent</button></header>
-    <div id="sandbox-banner" hidden></div>
-    <ul id="session-list"></ul>
-    <footer><button id="btn-search" class="ghost" data-i18n-title="Search everywhere (Shift Shift, Ctrl+K)" data-i18n>Search</button><button id="btn-settings" class="ghost" data-i18n>Settings</button></footer>
+    <div id="inbox-scroll">
+      <div id="attn-wrap" hidden>
+        <div class="sec"><span data-i18n>Needs attention</span><span class="pill run" id="attn-count"></span></div>
+        <div class="sec-sub" id="attn-sub"></div>
+        <ul id="attn-list" class="cards"></ul>
+      </div>
+      <div class="sec"><span data-i18n>Agents</span><span class="hint" id="agents-count"></span><span class="spacer"></span>
+        <button id="btn-start" class="ib" data-i18n-title="Start agent"><i data-ico="plus" data-size="17"></i></button></div>
+      <ul id="session-list" class="cards"></ul>
+      <div id="empty-inbox"><div data-i18n>No agents yet.</div><button id="btn-start2" class="primary"><i data-ico="sparkles" data-size="15"></i><span data-i18n>Start agent</span></button></div>
+    </div>
+    <div id="inbox-foot"><span id="sandbox-banner" hidden></span><span class="spacer"></span>
+      <button id="btn-settings" class="ib" data-i18n-title="Settings"><i data-ico="sliders" data-size="17"></i></button></div>
   </aside>
 
   <main id="center">
     <nav class="tabs" id="center-tabs">
-      <button data-tab="agent" class="active" data-i18n>Agent</button>
-      <button data-tab="editor"><span data-i18n>Editor</span> <span id="editor-file"></span></button>
+      <button data-tab="agent" class="active"><i data-ico="sparkles"></i><span data-i18n>Agent</span></button>
+      <button data-tab="editor"><i data-ico="file-code"></i><span><span data-i18n>Editor</span> <span id="editor-file"></span></span></button>
       <span class="spacer"></span><span id="session-meta"></span>
     </nav>
-    <section id="pane-agent" class="pane active"><div id="terminals"></div><div id="empty" class="empty" data-i18n>Start an agent to begin.</div></section>
+    <section id="pane-agent" class="pane active">
+      <div id="chat-head" hidden>
+        <span class="tile" id="ch-icon"></span>
+        <div><div class="ct" id="ch-title"></div><div class="cs" id="ch-sub"></div></div>
+        <span class="pill" id="ch-status"></span><span class="pill ok" id="ch-sandbox"></span>
+        <button class="ib" id="ch-stop" data-i18n-title="Stop agent"><i data-ico="stop" data-size="15"></i></button>
+      </div>
+      <div id="terminals"></div>
+      <div id="empty" class="empty"><div class="box"><h2>Hearth <b>IDE</b></h2><p class="hint" data-i18n>Start an agent to begin.</p></div></div>
+    </section>
     <section id="pane-editor" class="pane">
-      <div id="editor-bar"><button id="btn-save" class="primary" disabled data-i18n>Save (Ctrl+S)</button><span id="editor-status"></span></div>
+      <div id="editor-bar"><button id="btn-save" class="primary" disabled><i data-ico="save" data-size="14"></i><span data-i18n>Save (Ctrl+S)</span></button><span id="editor-status"></span></div>
       <div id="monaco"></div>
       <div id="usages" hidden>
-        <div class="usages-head"><strong id="usages-title"></strong><span class="spacer"></span><button id="usages-close" class="ghost">x</button></div>
+        <div class="usages-head"><strong id="usages-title"></strong><span class="spacer"></span><button id="usages-close" class="ib"><i data-ico="x" data-size="15"></i></button></div>
         <div id="usages-list"></div>
       </div>
     </section>
@@ -37,69 +62,75 @@
 
   <aside id="inspector">
     <nav class="tabs" id="insp-tabs">
-      <button data-tab="files" class="active" data-i18n>Files</button>
-      <button data-tab="git"><span data-i18n>Git</span> <span id="git-count"></span></button>
-      <button data-tab="overview" data-i18n>Overview</button>
-      <button data-tab="tests" data-i18n>Tests</button>
-      <button data-tab="arch" data-i18n>Architecture</button>
-      <button data-tab="build" data-i18n>Build</button>
-      <button data-tab="ci" data-i18n>CI/CD</button>
+      <button data-tab="files" class="active" data-i18n-title="Files"><i data-ico="folder"></i><span class="lbl" data-i18n>Files</span></button>
+      <button data-tab="git" data-i18n-title="Git"><i data-ico="git-branch"></i><span class="lbl"><span data-i18n>Git</span> <span id="git-count"></span></span></button>
+      <button data-tab="overview" data-i18n-title="Overview"><i data-ico="tree"></i><span class="lbl" data-i18n>Overview</span></button>
+      <button data-tab="tests" data-i18n-title="Tests"><i data-ico="flask"></i><span class="lbl" data-i18n>Tests</span></button>
+      <button data-tab="arch" data-i18n-title="Architecture"><i data-ico="workflow"></i><span class="lbl" data-i18n>Architecture</span></button>
+      <button data-tab="build" data-i18n-title="Build"><i data-ico="wrench"></i><span class="lbl" data-i18n>Build</span></button>
+      <button data-tab="ci" data-i18n-title="CI/CD"><i data-ico="activity"></i><span class="lbl" data-i18n>CI/CD</span></button>
     </nav>
 
     <section id="insp-files" class="pane active"><div id="tree"></div></section>
 
     <section id="insp-git" class="pane">
-      <div class="row wrap"><select id="git-branch" title="Branch"></select>
-        <button id="git-newbranch" class="ghost" data-i18n>New branch</button></div>
-      <div id="git-head" class="hint"></div>
-      <div class="row wrap">
-        <button id="git-fetch" class="ghost" data-i18n>Fetch</button><button id="git-pull" class="ghost" data-i18n>Pull</button>
-        <button id="git-push" class="ghost" data-i18n>Push</button><button id="git-pr" class="ghost" data-i18n>MR / PR</button>
+      <div class="gbranch">
+        <div class="bn"><i data-ico="git-branch" data-size="17"></i><select id="git-branch" title="Branch"></select>
+          <button id="git-newbranch" class="ib" data-i18n-title="New branch"><i data-ico="plus" data-size="16"></i></button></div>
+        <div class="up" id="git-head"></div>
+        <div class="gbar">
+          <button id="git-fetch"><i data-ico="refresh" data-size="14"></i><span data-i18n>Fetch</span></button>
+          <button id="git-pull"><i data-ico="download" data-size="14"></i><span data-i18n>Pull</span></button>
+          <button id="git-push"><i data-ico="upload" data-size="14"></i><span data-i18n>Push</span></button>
+          <button id="git-pr"><i data-ico="git-pr" data-size="14"></i><span data-i18n>MR / PR</span></button>
+        </div>
       </div>
-      <h4 data-i18n>Changes</h4>
-      <div class="row"><button id="git-stageall" class="ghost" data-i18n>Stage all</button><button id="git-unstageall" class="ghost" data-i18n>Unstage all</button></div>
+      <div class="gsec"><i data-ico="chevron-down" data-size="13"></i><span data-i18n>Changes</span><span class="cnt" id="git-count2">0</span><span class="spacer"></span>
+        <button id="git-stageall" class="ghost" data-i18n>Stage all</button><button id="git-unstageall" class="ghost" data-i18n>Unstage all</button></div>
       <div id="git-files"></div>
       <textarea id="commit-msg" data-i18n-ph="Commit message" placeholder="Commit message"></textarea>
-      <div class="row"><button id="btn-commit" class="primary" data-i18n>Commit staged</button><button id="btn-refresh" class="ghost" data-i18n>Refresh</button></div>
+      <div class="row"><button id="btn-commit" class="primary"><i data-ico="git-commit" data-size="15"></i><span data-i18n>Commit staged</span></button><button id="btn-refresh" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Refresh</span></button></div>
       <pre id="git-diff"></pre>
-      <h4 data-i18n>Stash</h4>
-      <div class="row wrap"><button id="stash-save" class="ghost" data-i18n>Stash changes</button></div>
-      <ul id="stash-list" class="plain"></ul>
-      <h4 data-i18n>Branches</h4>
-      <ul id="branch-list" class="plain"></ul>
+      <div class="gsec"><i data-ico="archive" data-size="14"></i><span data-i18n>Stash</span><span class="spacer"></span><button id="stash-save" class="ghost" data-i18n>Stash changes</button></div>
+      <div id="stash-list"></div>
+      <div class="gsec"><i data-ico="git-branch" data-size="14"></i><span data-i18n>Branches</span><span class="cnt" id="branch-count">0</span><span class="spacer"></span>
+        <span class="seg" id="branch-seg"><button class="on" data-scope="local" data-i18n>Local</button><button data-scope="remote" data-i18n>Remote</button></span></div>
+      <div class="row"><input id="branch-filter" data-i18n-ph="Filter" placeholder="Filter"></div>
+      <div id="branch-list" style="margin-top:8px"></div>
       <div id="merge-bar" class="row" hidden><span class="hint" data-i18n>A merge is in progress.</span><button id="merge-abort" data-i18n>Abort merge</button></div>
-      <h4 data-i18n>History</h4><ul id="git-log" class="plain"></ul>
+      <div class="gsec"><i data-ico="clock" data-size="14"></i><span data-i18n>Recent commits</span></div>
+      <div id="git-log"></div>
     </section>
 
     <section id="insp-overview" class="pane">
-      <div class="row wrap"><select id="jr-filter"><option value="all" data-i18n>All</option><option value="step" data-i18n>Steps</option><option value="decision" data-i18n>Decisions</option><option value="question" data-i18n>Open</option></select>
-        <button id="jr-ask" class="ghost" data-i18n>Ask agent to record its work</button></div>
+      <div class="row wrap"><select id="jr-filter" style="width:auto"><option value="all" data-i18n>All</option><option value="step" data-i18n>Steps</option><option value="decision" data-i18n>Decisions</option><option value="question" data-i18n>Open</option></select>
+        <button id="jr-ask" class="ghost"><i data-ico="sparkles" data-size="14"></i><span data-i18n>Ask agent to record its work</span></button></div>
       <div id="jr-current" class="hint"></div>
       <div id="jr-tree"></div>
     </section>
 
     <section id="insp-tests" class="pane">
-      <div class="row wrap"><button id="tests-run" class="primary" data-i18n>Run tests</button><button id="tests-reload" class="ghost" data-i18n>Reload reports</button></div>
+      <div class="row wrap"><button id="tests-run" class="primary"><i data-ico="play" data-size="13"></i><span data-i18n>Run tests</span></button><button id="tests-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Reload reports</span></button></div>
       <div id="tests-summary" class="hint"></div>
       <div id="tests-list"></div>
       <pre id="tests-out" class="outbox" hidden></pre>
     </section>
 
     <section id="insp-arch" class="pane">
-      <div class="row wrap"><select id="arch-file"></select><button id="arch-reload" class="ghost" data-i18n>Reload</button></div>
+      <div class="row wrap"><select id="arch-file" style="flex:1"></select><button id="arch-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Reload</span></button></div>
       <div id="arch-view"></div>
     </section>
 
     <section id="insp-build" class="pane">
       <div id="build-tasks"></div>
       <h4 data-i18n>Output</h4>
-      <div class="row"><span id="build-title" class="hint"></span><span class="spacer"></span><button id="build-stop" class="ghost" disabled data-i18n>Stop</button></div>
+      <div class="row"><span id="build-title" class="hint"></span><span class="spacer"></span><button id="build-stop" class="ghost" disabled><i data-ico="stop" data-size="13"></i><span data-i18n>Stop</span></button></div>
       <pre id="build-out"></pre>
     </section>
 
     <section id="insp-ci" class="pane">
       <div id="ci-head" class="hint"></div>
-      <div class="row wrap"><button id="ci-reload" class="ghost" data-i18n>Refresh</button><button id="ci-run" class="ghost" data-i18n>Run pipeline</button><button id="ci-token" class="ghost" data-i18n>Token...</button></div>
+      <div class="row wrap"><button id="ci-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Refresh</span></button><button id="ci-run" class="ghost"><i data-ico="play" data-size="13"></i><span data-i18n>Run pipeline</span></button><button id="ci-token" class="ghost"><i data-ico="shield" data-size="14"></i><span data-i18n>Token...</span></button></div>
       <div id="ci-list"></div>
       <h4 id="ci-jobs-title"></h4>
       <div id="ci-jobs"></div>
@@ -134,7 +165,7 @@
     <div class="set-pane active" id="set-general">
       <label><span data-i18n>Language</span> <select id="set-language"><option value="en">English</option><option value="de">Deutsch</option></select></label>
       <label><span data-i18n>Theme</span> <select id="set-theme"></select></label>
-      <p class="hint" data-i18n>Hearth Light, Darcula and Storm also colour the editor, the syntax and the terminals.</p>
+      <p class="hint" data-i18n>Hearth, Hearth Light, Darcula and Storm also colour the editor, the syntax and the terminals.</p>
       <label class="check"><input type="checkbox" id="set-journal"> <span data-i18n>Overview: give agents the hearth-journal command</span></label>
     </div>
     <div class="set-pane" id="set-sandbox">
@@ -152,7 +183,7 @@
       <p class="hint" data-i18n>Stored encrypted with Windows (DPAPI), never in a repository.</p>
       <h4 data-i18n>CI/CD tokens</h4>
       <div id="cred-tokens"></div>
-      <div class="row"><input id="cred-host" placeholder="github.com / gitlab.com"><select id="cred-write"><option value="read" data-i18n>read</option><option value="write" data-i18n>write (MR/PR, run)</option></select><input id="cred-token" type="password" placeholder="token"><button type="button" id="cred-add" data-i18n>Save</button></div>
+      <div class="row"><input id="cred-host" placeholder="github.com / gitlab.com"><select id="cred-write" style="width:auto"><option value="read" data-i18n>read</option><option value="write" data-i18n>write (MR/PR, run)</option></select><input id="cred-token" type="password" placeholder="token"><button type="button" id="cred-add" data-i18n>Save</button></div>
       <h4 data-i18n>Environment variables for agents</h4>
       <div id="cred-env"></div>
       <div class="row"><input id="env-name" placeholder="ANTHROPIC_API_KEY"><input id="env-value" type="password" placeholder="value"><button type="button" id="env-add" data-i18n>Save</button></div>
@@ -162,7 +193,7 @@
       <p id="about-version"></p>
       <div class="row"><button type="button" id="btn-update" data-i18n>Check for updates</button><span id="update-result" class="hint"></span></div>
     </div>
-    <div class="row end"><button value="cancel" data-i18n>Close</button><button id="btn-save-settings" class="primary" value="save" data-i18n>Save</button></div>
+    <div class="row end" style="margin-top:14px"><button value="cancel" data-i18n>Close</button><button id="btn-save-settings" class="primary" value="save" data-i18n>Save</button></div>
   </form>
 </dialog>
 
@@ -188,6 +219,7 @@
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
 <script src="../../node_modules/mermaid/dist/mermaid.min.js"></script>
+<script src="icons.js"></script>
 <script src="i18n.js"></script>
 <script src="i18n-de.js"></script>
 <script src="themes.js"></script>

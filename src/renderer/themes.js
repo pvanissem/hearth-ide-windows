@@ -24,6 +24,13 @@
       ansi: [0x24292F, 0xCF222E, 0x116329, 0x7D4E00, 0x0969DA, 0x8250DF, 0x1B7C83, 0x6E7781, 0x57606A, 0xA40E26, 0x1A7F37, 0x633C01, 0x218BFF, 0xA475F9, 0x3192AA, 0x8C959F],
     }),
   };
+  // "Feuerring bei Nacht" (DESIGN.md): night ground, ash text, flame as the one warm light.
+  palettes.hearth = P({
+    dark: true, window: 0x0E0A12, pane: 0x170F1C, editorBackground: 0x120C15, editorForeground: 0xE9DFE6, gutter: 0x170F1C, gutterText: 0x6E5F73,
+    selection: 0x4A2F3A, caret: 0xFFA62B, accent: 0xFFA62B, keyword: 0xFF7A3D, type: 0xFFE3A1, string: 0xA8D08D, number: 0xFFA62B, comment: 0x8F7D95,
+    attribute: 0xFFA62B, function: 0xFFD58A, key: 0xFF8A4C, tag: 0xFF5A1F, punctuation: 0xBFB0BB, heading: 0xFFA62B,
+    ansi: [0x1D1420, 0xFF6B5F, 0xA8D08D, 0xFFA62B, 0x8AB4F8, 0xD7A1E0, 0x7FD6D0, 0xBFB0BB, 0x5C4D63, 0xFF8A80, 0xC3E0A8, 0xFFE3A1, 0xA9C8FA, 0xE6BFEC, 0xA5E8E3, 0xE9DFE6],
+  });
   for (const k of ['window', 'pane', 'editorBackground', 'editorForeground', 'gutter', 'gutterText', 'selection', 'caret', 'accent', 'keyword', 'type', 'string', 'number', 'comment', 'attribute', 'function', 'key', 'tag', 'punctuation', 'heading'])
     for (const p of Object.values(palettes)) p[k] = hex(p[k]);
 
@@ -34,39 +41,47 @@
   let current = 'system';
   const listeners = new Set();
 
-  /** The palette in effect (null: system colours from CSS). */
-  function palette(name = current) { return palettes[name] || null; }
+  /** The palette in effect. "System" follows Windows: Hearth at night, Hearth Light by day. */
+  function palette(name = current) {
+    if (name === 'system') name = systemDark() ? 'hearth' : 'hearthLight';
+    return palettes[name] || null;
+  }
+
+  const rgba = (h, a) => `rgba(${rgb(h).join(',')},${a})`;
+  /** Text colour on top of the accent: dark on light accents (flame), white on dark ones. */
+  const onAccent = (accent) => { const [r, g, b] = rgb(accent); return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#14100f' : '#ffffff'; };
 
   function systemDark() { return !media.matches; }
 
   function apply(name) {
-    current = palettes[name] ? name : 'system';
+    current = (name === 'system' || palettes[name]) ? name : 'system';
     const root = document.documentElement;
     const p = palette();
-    const names = ['--bg', '--panel', '--panel2', '--line', '--fg', '--dim', '--accent', '--term-bg', '--term-fg'];
-    if (!p) {
-      for (const n of names) root.style.removeProperty(n);
-      root.dataset.theme = systemDark() ? 'dark' : 'light';
-    } else {
-      root.dataset.theme = p.dark ? 'dark' : 'light';
-      const fg = p.editorForeground;
-      root.style.setProperty('--bg', p.window);
-      root.style.setProperty('--panel', p.pane);
-      root.style.setProperty('--panel2', mix(p.pane, fg, 0.07));
-      root.style.setProperty('--line', mix(p.pane, fg, 0.16));
-      root.style.setProperty('--fg', fg);
-      root.style.setProperty('--dim', mix(fg, p.pane, 0.45));
-      root.style.setProperty('--accent', p.accent);
-      root.style.setProperty('--term-bg', p.editorBackground);
-      root.style.setProperty('--term-fg', fg);
-    }
-    for (const cb of listeners) cb(current);
+    const set = (k, v) => root.style.setProperty(k, v);
+    root.dataset.theme = p.dark ? 'dark' : 'light';
+    const fg = p.editorForeground;
+    set('--bg', p.window);
+    set('--panel', p.pane);
+    set('--panel2', mix(p.pane, fg, 0.06));
+    set('--panel3', mix(p.pane, fg, 0.11));
+    set('--line', mix(p.pane, fg, 0.14));
+    set('--line-soft', mix(p.pane, fg, 0.09));
+    set('--fg', fg);
+    set('--dim', mix(fg, p.pane, 0.42));
+    set('--accent', p.accent);
+    set('--accent-soft', rgba(p.accent, 0.16));
+    set('--accent-line', rgba(p.accent, 0.4));
+    set('--on-accent', onAccent(p.accent));
+    set('--term-bg', p.editorBackground);
+    set('--term-fg', fg);
+    set('--sidebar', rgba(p.window, p.dark ? 0.78 : 0.7));   // lets Windows 11 Mica shine through the sidebar
+    set('--shadow', p.dark ? 'rgba(0,0,0,.45)' : 'rgba(30,25,40,.16)');
+    for (const cb of listeners) cb(current, p);
   }
   media.addEventListener('change', () => { if (current === 'system') apply('system'); });
 
   function terminalTheme() {
     const p = palette();
-    if (!p) return systemDark() ? { background: '#14151a', foreground: '#dfe1e5', cursor: '#f08a4b' } : { background: '#ffffff', foreground: '#1d1f23', cursor: '#d96a1f' };
     const a = p.ansi;
     return { background: p.editorBackground, foreground: p.editorForeground, cursor: p.caret, selectionBackground: p.selection,
       black: a[0], red: a[1], green: a[2], yellow: a[3], blue: a[4], magenta: a[5], cyan: a[6], white: a[7],
@@ -76,7 +91,6 @@
   /** Monaco theme for the palette, or the built-in light/dark one for the system theme. */
   function monacoTheme(monaco) {
     const p = palette();
-    if (!p) return systemDark() ? 'vs-dark' : 'vs';
     const c = (h) => h.slice(1);
     monaco.editor.defineTheme('hearth-' + current, {
       base: p.dark ? 'vs-dark' : 'vs', inherit: true,
@@ -100,6 +114,6 @@
     palettes, apply, palette, terminalTheme, monacoTheme, mix,
     get current() { return current; },
     onChange(cb) { listeners.add(cb); return () => listeners.delete(cb); },
-    list: [['system', 'System'], ['hearthLight', 'Hearth Light'], ['darcula', 'Darcula'], ['storm', 'Storm']],
+    list: [['system', 'System'], ['hearth', 'Hearth'], ['hearthLight', 'Hearth Light'], ['darcula', 'Darcula'], ['storm', 'Storm']],
   };
 })();

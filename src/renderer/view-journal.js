@@ -4,7 +4,8 @@
   let data = null;
   let timer = null;
 
-  const KIND = { step: '▶', decision: '⚖', question: '?' };
+  const KIND = { step: 'chevron-right', decision: 'git-branch', question: 'help-circle' };
+  const kindIcon = (k) => { const s = el('span', { class: 'k' }); s.innerHTML = Icons.html(KIND[k] || 'file', 15); return s; };
   const matches = (n, f) => f === 'all' || (f === 'step' && n.kind === 'step') || (f === 'decision' && n.kind === 'decision') || (f === 'question' && (n.kind === 'question' || n.open > 0));
 
   function render() {
@@ -27,7 +28,7 @@
         const kids = n.children.filter((c) => matches(c, filter) || c.children.length);
         if (!matches(n, filter) && !kids.length) continue;
         const row = el('div', { class: `jn ${n.revoked ? 'revoked' : ''}` });
-        row.append(el('div', { class: 'jt' }, el('span', {}, KIND[n.kind] || ''), el('span', { class: 'jid hint' }, n.id), el('span', {}, n.title),
+        row.append(el('div', { class: 'jt' }, kindIcon(n.kind), el('span', { class: 'jid hint' }, n.id), el('span', {}, n.title),
           el('span', { class: `jbadge ${n.status}` }, t(n.status)), n.open ? el('span', { class: 'jbadge open' }, t('{n} open', { n: n.open })) : ''));
         if (n.why) row.append(el('div', { class: 'why' }, `${t('Why')}: ${n.why}`));
         for (const r of n.rejected) row.append(el('div', { class: 'rej' }, `${t('Rejected')}: ${r}`));

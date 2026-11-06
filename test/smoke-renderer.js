@@ -118,12 +118,17 @@
 
   // ---- German UI ----
   I18n.set('de'); renderInbox(); await wait(200);
-  r.germanStart = $('#btn-start').textContent;
+  r.germanStart = $('#btn-start2').textContent;
+  r.inboxCards = document.querySelectorAll('.card').length;
+  r.cardHasSummary = Boolean(document.querySelector('.card .sum'));
+  r.chatHeadShown = !$('#chat-head').hidden;
+  r.fontsLoaded = document.fonts.check('13px "Hanken Grotesk"') && document.fonts.check('13px "Azeret Mono"');
+  r.titlebarBrand = $('#titlebar .brand').textContent.trim();
   r.germanTab = $('#insp-tabs [data-tab="overview"]').textContent;
   click('#insp-tabs [data-tab="files"]');
   await shot('german');
   I18n.set('en'); await wait(100);
-  r.englishBack = $('#btn-start').textContent;
+  r.englishBack = $('#btn-start2').textContent;
 
   // ---- Settings + credentials ----
   click('#btn-settings'); await wait(500);
@@ -139,6 +144,12 @@
   document.querySelector('#center-tabs [data-tab="agent"]').click();
   await wait(500);
   await shot('final');
+  // the default look, and the light one
+  document.querySelector('#insp-tabs [data-tab="git"]').click();
+  Themes.apply('hearthLight'); await wait(500); await shot('light');
+  Themes.apply('hearth'); await wait(500); await shot('hearth');
+  r.emptyHidden = getComputedStyle($('#empty')).display === 'none';
+  r.mergeBarHidden = getComputedStyle($('#merge-bar')).display === 'none';
   await h.remove(s.id);
   return r;
 })()

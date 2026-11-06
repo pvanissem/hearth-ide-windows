@@ -84,15 +84,33 @@ const need = (ref) => { if (!validRef(ref)) throw new Error('Invalid branch name
 
 function parseBranches(raw) {
   return raw.split('\n').filter(Boolean).map((l) => {
-    const [name, head, upstream, remote] = l.split('\t');
-    return { name, current: head === '*', upstream: upstream || null, remote: remote === 'remote' };
+    const [name, head, upstream, remote, date, ...subject] = l.split('\t');
+    return { name, current: head === '*', upstream: upstream || null, remote: remote === 'remote', date: date || '', subject: subject.join(' ') };
   }).filter((b) => !b.name.endsWith('/HEAD'));
 }
 
 async function branches(cwd) {
-  const local = await git(cwd, ['for-each-ref', '--format=%(refname:short)\t%(HEAD)\t%(upstream:short)\tlocal', 'refs/heads']);
-  const remote = await git(cwd, ['for-each-ref', '--format=%(refname:short)\t \t\tremote', 'refs/remotes']);
+  const tail = '%(committerdate:relative)\t%(contents:subject)';
+  const local = await git(cwd, ['for-each-ref', `--format=%(refname:short)\t%(HEAD)\t%(upstream:short)\tlocal\t${tail}`, 'refs/heads']).catch(() => '');
+  const remote = await git(cwd, ['for-each-ref', `--format=%(refname:short)\t \t\tremote\t${tail}`, 'refs/remotes']).catch(() => '');
   return parseBranches(local + remote);
+}
+
+/** Lines added/removed per file (staged and unstaged together): { path: { add, del } }. */
+function parseNumstat(raw) {
+  const out = {};
+  for (const l of raw.split('\n').filter(Boolean)) {
+    const [a, d, ...rest] = l.split('\t');
+    const p = rest.join('\t').replace(/^(.*)\{.* => (.*)\}(.*)$/, '$1$2$3').replace(/^.* => /, '');
+    if (!p) continue;
+    const add = a === '-' ? 0 : Number(a) || 0; const del = d === '-' ? 0 : Number(d) || 0;
+    out[p] = { add: (out[p]?.add || 0) + add, del: (out[p]?.del || 0) + del };
+  }
+  return out;
+}
+async function numstat(cwd) {
+  const [unstaged, staged] = await Promise.all([git(cwd, ['diff', '--numstat', '--no-ext-diff']).catch(() => ''), git(cwd, ['diff', '--cached', '--numstat', '--no-ext-diff']).catch(() => '')]);
+  return parseNumstat(unstaged + staged);
 }
 
 const checkout = async (cwd, branch) => git(cwd, ['checkout', need(branch)]);
@@ -137,6 +155,6 @@ const stashDrop = async (cwd, ref) => git(cwd, ['stash', 'drop', stashRef(ref)])
 
 module.exports = {
   status, diff, stage, unstage, commit, log, isRepo, parseStatus,
-  validRef, parseBranches, branches, checkout, createBranch, fetch, pull, push, stageAll, unstageAll, merge, mergeAbort, mergeInProgress,
+  validRef, parseBranches, parseNumstat, numstat, branches, checkout, createBranch, fetch, pull, push, stageAll, unstageAll, merge, mergeAbort, mergeInProgress,
   remoteUrl, parseStashes, stashList, stashSave, stashApply, stashPop, stashDrop,
 };

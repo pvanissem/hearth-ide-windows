@@ -36,9 +36,10 @@
     if (!tasks.length) { box.append(el('div', { class: 'hint' }, t('No build tasks found (package.json, Maven, Gradle, Go, Cargo, Makefile or .hearth/tasks.json).'))); return; }
     let tool = null;
     for (const task of tasks) {
-      if (task.tool !== tool) { tool = task.tool; box.append(el('h4', {}, tool)); }
+      if (task.tool !== tool) { tool = task.tool; box.append(el('div', { class: 'tool' }, el('span', {}, ''), el('span', { class: 'pill' }, tool))); box.lastChild.firstChild.innerHTML = Icons.html('package', 16); }
       const running = run && run.taskId === task.id && $('#build-stop').disabled === false;
-      const b = el('button', { class: running ? '' : 'primary' }, running ? t('Running...') : task.kind === 'service' ? t('Start') : t('Run'));
+      const b = el('button', { class: running ? '' : 'primary', title: running ? t('Running...') : task.kind === 'service' ? t('Start') : t('Run') });
+      b.innerHTML = Icons.html(running ? 'refresh' : 'play', 13);
       b.disabled = Boolean(running);
       b.addEventListener('click', async () => {
         try {
@@ -49,7 +50,9 @@
           if (task.port) $('#build-title').textContent += `  - http://localhost:${task.port}`;
         } catch (err) { alert(errMsg(err)); }
       });
-      box.append(el('div', { class: 'task' }, el('span', { class: 'tn' }, task.title, ' ', el('small', {}, task.kind === 'service' ? t('service') : '')), b));
+      const ti = el('span', { class: 'ti' }); ti.innerHTML = Icons.html(task.kind === 'service' ? 'globe' : task.test ? 'flask' : 'wrench', 15);
+      box.append(el('div', { class: `task ${task.kind}` }, ti,
+        el('span', { class: 'tn' }, el('b', {}, task.title), ' ', task.kind === 'service' ? el('span', { class: 'pill mono' }, t('service')) : '', el('small', { title: task.command }, task.command)), b));
     }
   }
   $('#build-stop').addEventListener('click', () => { if (run) B.stop(run.id); });
