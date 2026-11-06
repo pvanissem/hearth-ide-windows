@@ -251,16 +251,19 @@ static class Program
         if (args.Length > 0 && args[0] == "journal") return JournalMain(args);
         Options o;
         try { o = Parse(args); } catch (Exception e) { return Fail(e.Message); }
+        // The gate comes FIRST, before the container profile is opened: a clean-up of the previous session deletes that
+        // profile, and a start that had already opened it then failed with "file not found" (the case after closing a session).
+        // Released right after the process exists (Leave below), on every failure (FailLeave) and at the end of a clean-up.
+        Enter();
         string container = ContainerName(o.Name);
         IntPtr sidPtr;
-        try { sidPtr = ContainerSid(container); } catch (Exception e) { return Fail("cannot create container: " + e.Message); }
+        try { sidPtr = ContainerSid(container); } catch (Exception e) { return FailLeave("cannot create container: " + e.Message); }
         string sidText; Native.ConvertSidToStringSid(sidPtr, out sidText);
         var sid = new SecurityIdentifier(sidText);
 
-        if (o.PrintSid) { Console.WriteLine(sidText); return 0; }
+        if (o.PrintSid) { Leave(); Console.WriteLine(sidText); return 0; }
         if (o.Revoke)
         {
-            Enter();
             try
             {
                 foreach (var p in o.Rw) Revoke(p, sid);
@@ -272,9 +275,8 @@ static class Program
             finally { Leave(); }
             return 0;
         }
-        if (string.IsNullOrEmpty(o.CommandLine)) return Fail("no command");
+        if (string.IsNullOrEmpty(o.CommandLine)) return FailLeave("no command");
 
-        Enter();      // released right after the process exists (Leave below) or on any failure (FailLeave)
         try
         {
             foreach (var p in o.Ro) Grant(p, sid, FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize);
