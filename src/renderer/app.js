@@ -109,8 +109,8 @@ async function updateHint() {
   const agents = await window.hearth.agents();
   const a = agents.find((x) => x.id === $('#start-kind').value);
   const env = state.env;
-  let hint = a && a.install ? `Install: ${a.install} (inside WSL, in the sandbox)` : '';
-  if (env && !(env.wsl && env.nono)) hint += (hint ? '\n' : '') + env.reason;
+  let hint = a && a.install ? `Install: ${a.install} (the sandbox reads it from your PATH)` : '';
+  if (env && !env.backend) hint += (hint ? '\n' : '') + env.reason;
   $('#start-hint').textContent = hint;
 }
 $('#start-kind').addEventListener('change', updateHint);
@@ -135,9 +135,10 @@ async function openSettings() {
   $('#set-domains').value = s.domains.join('\n');
   $('#set-ports').value = s.ports.join(', ');
   $('#set-ssh').checked = s.gitSSH;
+  $('#set-network').value = s.network;
   $('#set-unsandboxed').checked = s.allowUnsandboxed;
   const e = state.env;
-  $('#env-info').textContent = e.wsl ? `WSL2: ${e.distro} - nono: ${e.nono ? 'installed' : 'missing'}` : 'WSL2: not installed';
+  $('#env-info').textContent = e.backend === 'native' ? 'Sandbox: native Windows AppContainer (WSL2 not required)' : e.backend === 'wsl' ? `Sandbox: nono in WSL2 (${e.distro})` : e.reason;
   $('#dlg-settings').showModal();
 }
 $('#btn-settings').addEventListener('click', openSettings);
@@ -146,17 +147,17 @@ $('#btn-save-settings').addEventListener('click', async () => {
     ...state.settings,
     domains: $('#set-domains').value.split(/\s+/).filter(Boolean),
     ports: $('#set-ports').value.split(/[,\s]+/).filter(Boolean).map(Number),
-    gitSSH: $('#set-ssh').checked, allowUnsandboxed: $('#set-unsandboxed').checked,
+    network: $('#set-network').value, gitSSH: $('#set-ssh').checked, allowUnsandboxed: $('#set-unsandboxed').checked,
   });
 });
 
 async function showSandboxState() {
   state.env = await window.hearth.detect();
   const b = $('#sandbox-banner');
-  const ok = state.env.wsl && state.env.nono;
+  const ok = Boolean(state.env.backend);
   b.hidden = false;
   b.className = ok ? 'ok' : '';
-  b.textContent = ok ? `Sandbox ready (WSL2 ${state.env.distro} + nono)` : `No sandbox: ${state.env.reason}`;
+  b.textContent = ok ? (state.env.backend === 'native' ? 'Sandbox ready (Windows AppContainer, no install needed)' : `Sandbox ready (WSL2 ${state.env.distro} + nono)`) : `No sandbox: ${state.env.reason}`;
 }
 
 // ---------- file tree ----------

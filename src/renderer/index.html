@@ -62,8 +62,10 @@
     <div id="env-info" class="hint"></div>
     <label>Extra allowed domains (one per line) <textarea id="set-domains" rows="4"></textarea></label>
     <label>Extra open ports (comma separated) <input id="set-ports"></label>
+    <label>Network for sandboxed agents <select id="set-network"><option value="internet">Internet (agents need their API)</option><option value="none">Offline</option></select></label>
+    <p class="hint">Files and processes are isolated by Windows (AppContainer). The domain list above is only enforced with the WSL2 backend.</p>
     <label class="check"><input type="checkbox" id="set-ssh"> Git over SSH (read ~/.ssh in the Git sandbox)</label>
-    <label class="check danger"><input type="checkbox" id="set-unsandboxed"> Allow running agents WITHOUT a sandbox when WSL2/nono is missing</label>
+    <label class="check danger"><input type="checkbox" id="set-unsandboxed"> Allow running agents WITHOUT a sandbox when no sandbox is available</label>
     <div class="row end"><button value="cancel">Cancel</button><button id="btn-save-settings" class="primary" value="save">Save</button></div>
   </form>
 </dialog>

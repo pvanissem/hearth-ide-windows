@@ -5,7 +5,7 @@ const path = require('node:path');
 const { validDomain } = require('./policy');
 
 const FILE = path.join(process.env.HEARTH_HOME || os.homedir(), '.hearth', 'settings.json');
-const DEFAULTS = { language: 'en', domains: [], ports: [], folders: [], gitSSH: true, allowUnsandboxed: false };
+const DEFAULTS = { language: 'en', domains: [], ports: [], folders: [], gitSSH: true, allowUnsandboxed: false, backend: 'auto', network: 'internet' };
 
 function sanitize(raw) {
   const s = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw : {}) };
@@ -15,6 +15,8 @@ function sanitize(raw) {
   s.gitSSH = Boolean(s.gitSSH);
   s.allowUnsandboxed = Boolean(s.allowUnsandboxed);
   s.language = s.language === 'de' ? 'de' : 'en';
+  s.backend = s.backend === 'wsl' ? 'wsl' : 'auto';
+  s.network = s.network === 'none' ? 'none' : 'internet';
   return s;
 }
 

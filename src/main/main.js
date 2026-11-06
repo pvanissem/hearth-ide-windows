@@ -9,6 +9,7 @@ const sandbox = require('./sandbox');
 const settings = require('./settings');
 const git = require('./git');
 const { StatusTracker } = require('./status');
+const { execFile, execFileSync } = require('node:child_process');
 
 /** @type {Map<string, {id:string, kind:string, directory:string, sandboxed:boolean, term:any, status:StatusTracker, started:number, title:string}>} */
 const sessions = new Map();
@@ -46,7 +47,7 @@ function createWindow() {
 }
 
 // ---- sandbox / settings ----
-ipcMain.handle('env:detect', (_e, force) => sandbox.detect(Boolean(force)));
+ipcMain.handle('env:detect', (_e, force) => sandbox.detect(Boolean(force), settings.load().backend));
 ipcMain.handle('settings:get', () => settings.load());
 ipcMain.handle('settings:set', (_e, next) => settings.save(next));
 ipcMain.handle('agents:list', () => Object.entries(AGENTS).map(([id, a]) => ({ id, name: a.name, install: a.install, login: Boolean(a.login) })));
@@ -66,12 +67,12 @@ ipcMain.handle('session:start', async (_e, { kind, directory, login = false, res
   const id = 'run_' + crypto.randomBytes(5).toString('hex');
   const launch = await sandbox.prepare({
     purpose: 'agent', kind, runID: id, directory: dir, settings: cfg, resumeID,
-    mode: cfg.allowUnsandboxed && !(await sandbox.detect()).nono ? 'none' : 'sandbox',
+    mode: cfg.allowUnsandboxed && !(await sandbox.detect(false, cfg.backend)).backend ? 'none' : 'sandbox',
     extraArgs: login && AGENTS[kind].login ? AGENTS[kind].login : [],
   });
   const term = pty.spawn(launch.file, launch.args, { name: 'xterm-256color', cols: 120, rows: 32, cwd: launch.cwd, env: launch.env, useConpty: true });
   const status = new StatusTracker((state) => send('session:status', { id, status: state }));
-  const s = { id, kind, directory: dir, sandboxed: launch.sandboxed, term, status, started: Date.now(), title: path.basename(dir) };
+  const s = { id, kind, directory: dir, sandboxed: launch.sandboxed, backend: launch.backend, revoke: launch.revoke, helper: launch.helper, term, status, started: Date.now(), title: path.basename(dir) };
   sessions.set(id, s);
   term.onData((d) => { status.data(d); send('session:data', { id, data: d }); });
   term.onExit(({ exitCode }) => { status.exit(exitCode); send('session:exit', { id, code: exitCode }); });
@@ -83,7 +84,7 @@ ipcMain.on('session:resize', (_e, { id, cols, rows }) => {
   if (s && cols > 0 && rows > 0) { try { s.term.resize(Math.floor(cols), Math.floor(rows)); } catch { /* exited */ } }
 });
 ipcMain.handle('session:stop', (_e, id) => { const s = sessions.get(id); if (s) { try { s.term.kill(); } catch { /* exited */ } } });
-ipcMain.handle('session:remove', (_e, id) => { const s = sessions.get(id); if (s) { try { s.term.kill(); } catch { /* */ } sessions.delete(id); } });
+ipcMain.handle('session:remove', (_e, id) => { const s = sessions.get(id); if (s) { try { s.term.kill(); } catch { /* */ } sessions.delete(id); revokeGrants(s); } });
 ipcMain.handle('session:list', () => [...sessions.values()].map(publicSession));
 
 // ---- files (workspace only) ----
@@ -129,8 +130,28 @@ async function smoke() {
   try { out = await win.webContents.executeJavaScript(fs.readFileSync(process.env.HEARTH_SMOKE, 'utf8')); } catch (e) { out = { error: String(e) }; }
   if (process.env.HEARTH_SHOT) fs.writeFileSync(process.env.HEARTH_SHOT, (await win.webContents.capturePage()).toPNG());
   console.log('SMOKE_RESULT ' + JSON.stringify(out));
+  cleanupAll();
   app.exit(0);
 }
 
 app.whenReady().then(() => { createWindow(); if (process.env.HEARTH_SMOKE) smoke(); });
-app.on('window-all-closed', () => { for (const s of sessions.values()) { try { s.term.kill(); } catch { /* */ } } app.quit(); });
+// Leave no AppContainer grants behind, also when the app is closed or killed by a smoke test.
+let cleaned = false;
+function cleanupAll() {
+  if (cleaned) return;
+  cleaned = true;
+  const done = new Set();
+  for (const s of sessions.values()) {
+    try { s.term.kill(); } catch { /* exited */ }
+    if (s.revoke && s.helper && !done.has(s.directory)) { done.add(s.directory); try { execFileSync(s.helper, s.revoke, { windowsHide: true, timeout: 20000 }); } catch { /* best effort */ } }
+  }
+}
+app.on('before-quit', cleanupAll);
+app.on('window-all-closed', () => { cleanupAll(); app.quit(); });
+
+/** Remove the AppContainer grants of a finished session, unless another session still uses the same project. */
+function revokeGrants(s) {
+  if (!s.revoke || !s.helper) return;
+  if ([...sessions.values()].some((o) => o.directory === s.directory && o.revoke)) return;
+  execFile(s.helper, s.revoke, { windowsHide: true }, () => { /* best effort */ });
+}

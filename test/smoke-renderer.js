@@ -1,16 +1,14 @@
+// Runs inside the app window (injected by scripts/smoke.ps1, which defines SMOKE_DIR, SECRET, OUTSIDE).
 (async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const BS = String.fromCharCode(92);
   const r = {};
   const h = window.hearth;
   r.env = await h.detect();
   r.agents = (await h.agents()).map((a) => a.id);
-  // Without WSL/nono the start must be refused unless the user opted in.
-  try { await h.start({ kind: 'shell', directory: SMOKE_DIR }); r.refusedWithoutOptIn = false; } catch (e) { r.refusedWithoutOptIn = /WSL2|nono/.test(String(e)); }
-  await h.setSettings({ allowUnsandboxed: true });
-  // Outside the workspace: must be refused.
-  try { await h.list('C:\\Windows'); r.outsideRefused = false; } catch { r.outsideRefused = true; }
+  try { await h.list('C:' + BS + 'Windows'); r.outsideRefused = false; } catch { r.outsideRefused = true; }
 
-  // Start through the real UI path.
+  // Start a sandboxed shell through the real UI path.
   document.querySelector('#btn-start').click();
   await wait(300);
   document.querySelector('#start-kind').value = 'shell';
@@ -18,30 +16,41 @@
   const out = [];
   h.onData(({ data }) => out.push(data));
   document.querySelector('#btn-go').click();
-  await wait(2500);
+  await wait(4500);
   const s = (await h.sessions())[0];
-  r.sandboxed = s.sandboxed;
+  r.sandboxed = s && s.sandboxed;
+  r.backend = s && s.backend;
   r.sessionInUi = document.querySelectorAll('#session-list li').length;
-  h.input(s.id, 'echo hearth-smoke-ok\r');
-  await wait(2500);
-  r.ptyEcho = out.join('').includes('hearth-smoke-ok');
-  r.termRendered = document.querySelector('.term .xterm-rows')?.textContent.includes('hearth-smoke-ok') || false;
+  const strip = (t) => t.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+  const run = async (cmd, ms = 2500) => { out.length = 0; h.input(s.id, cmd + '\r'); await wait(ms); return strip(out.join('')); };
+  const denied = (t) => /denied|verweigert|Zugriff|Access/i.test(t);
+
+  r.echo = (await run('echo hearth-smoke-ok')).includes('hearth-smoke-ok');
+  r.termRendered = (document.querySelector('.term .xterm-rows')?.textContent || '').includes('hearth-smoke-ok');
+  // Isolation inside the real PTY:
+  const secret = await run('type "' + SECRET + '"');
+  r.secretReadBlocked = !secret.includes('TOPSECRET') && denied(secret);
+  r.projectRead = (await run('type package.json')).includes('hearth-ide-windows-fixture');
+  await run('echo sandbox-ok> sandbox-write-test.tmp');
+  r.projectWrite = (await h.read(SMOKE_DIR + BS + 'sandbox-write-test.tmp').catch(() => '')).includes('sandbox-ok');
+  r.outsideWriteBlocked = denied(await run('echo x> "' + OUTSIDE + '"'));
+  r.hooksBlocked = denied(await run('echo x> .git' + BS + 'hooks' + BS + 'pre-commit'));
+  const who = await run('whoami /user');
+  r.whoami = (who.match(/S-1-15-2-[\d-]+/) || ['(no appcontainer sid)'])[0].slice(0, 22) + '...';
+
   r.files = (await h.list(SMOKE_DIR)).map((e) => e.name).slice(0, 8);
-  r.pkg = (await h.read(SMOKE_DIR + '\\package.json')).slice(0, 20);
   r.isRepo = await h.git.isRepo(SMOKE_DIR);
-  const st = await h.git.status(SMOKE_DIR);
-  r.branch = st.branch; r.changed = st.files.length;
-  r.logCount = (await h.git.log(SMOKE_DIR)).length;
-  try { await h.write(SMOKE_DIR + '\\.git\\hooks\\pre-commit', 'x'); r.hooksProtected = false; } catch (e) { r.hooksProtected = /write-protected/.test(String(e)); }
+  r.branch = (await h.git.status(SMOKE_DIR)).branch;
   r.status = (await h.sessions())[0].status;
-  r.treeNodes = document.querySelectorAll('#tree .node').length;
   document.querySelector('#insp-tabs [data-tab="git"]').click();
   await wait(800);
   r.gitRows = document.querySelectorAll('#git-files .gf').length;
   document.querySelector('#insp-tabs [data-tab="files"]').click();
-  await openFile(SMOKE_DIR + '\\package.json');
+  await openFile(SMOKE_DIR + BS + 'package.json');
   await wait(2500);
-  r.monaco = monaco.editor.getModels().some((m) => m.getValue().includes('hearth-ide-windows'));
-  r.editorLang = monaco.editor.getModels()[0]?.getLanguageId();
+  r.monaco = monaco.editor.getModels().some((m) => m.getValue().includes('hearth-ide-windows-fixture'));
+  document.querySelector('#center-tabs [data-tab="agent"]').click();
+  await wait(500);
+  await h.remove(s.id);
   return r;
 })()

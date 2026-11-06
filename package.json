@@ -6,7 +6,11 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "prestart": "powershell -NoProfile -File scripts/build-native.ps1",
+    "build:native": "powershell -NoProfile -File scripts/build-native.ps1",
     "test": "node --test \"test/*.test.js\"",
+    "smoke": "powershell -NoProfile -File scripts/smoke.ps1",
+    "predist": "npm run build:native",
     "dist": "electron-builder --win --x64"
   },
   "build": {
@@ -18,7 +22,13 @@
     ],
     "win": {
       "target": "nsis"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "native/bin/hearth-sandbox.exe",
+        "to": "native/hearth-sandbox.exe"
+      }
+    ]
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
