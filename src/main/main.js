@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, shell, safeStorage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -58,7 +58,7 @@ function requireWorkspace(p) {
 }
 
 function publicSession(s) {
-  return { id: s.id, kind: s.kind, name: AGENTS[s.kind].name, directory: s.directory, sandboxed: s.sandboxed, backend: s.backend, status: s.status.state, started: s.started, title: s.title };
+  return { id: s.id, kind: s.kind, login: Boolean(s.login), name: AGENTS[s.kind].name, directory: s.directory, sandboxed: s.sandboxed, backend: s.backend, status: s.status.state, started: s.started, title: s.title };
 }
 
 function createWindow() {
@@ -88,7 +88,12 @@ ipcMain.handle('win:theme', (_e, { bg, fg }) => {
   if (!win || !hex.test(bg) || !hex.test(fg)) return;
   try { win.setTitleBarOverlay({ color: bg, symbolColor: fg, height: 40 }); win.setBackgroundColor(bg); } catch { /* not supported */ }
 });
-ipcMain.handle('app:open', (_e, url) => { if (/^https:\/\/[^\s]+$/.test(String(url))) return shell.openExternal(url); throw new Error('Only https links can be opened'); });
+// Links from the terminal (a click on the sign-in link of an agent, a dev server's address): https, or http to this PC only.
+const OPENABLE = /^(https:\/\/[^\s]+|http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/[^\s]*)?)$/;
+ipcMain.handle('app:open', (_e, url) => { if (OPENABLE.test(String(url)) && String(url).length < 4096) return shell.openExternal(String(url)); throw new Error('Only https links (and http links to this PC) can be opened'); });
+// Clipboard for the terminal (copy a selection, paste); the text only moves between the clipboard and the terminal.
+ipcMain.handle('clip:read', async () => String((await clipboard.readText()) || '').slice(0, 1024 * 1024));
+ipcMain.handle('clip:write', async (_e, text) => { if (typeof text === 'string') await clipboard.writeText(text.slice(0, 1024 * 1024)); });
 ipcMain.handle('app:checkUpdate', async () => updates.check(app.getVersion(), { token: creds.tokenFor('github.com', false) }).catch((e) => ({ error: plainError(e) })));
 
 ipcMain.handle('dialog:folder', async () => {
@@ -140,7 +145,7 @@ ipcMain.handle('session:start', async (_e, { kind, directory, login = false, res
   } catch (e) { leases.release(lease); throw e; }
   const status = new StatusTracker((state) => send('session:status', { id, status: state }));
   const reader = new journalLib.JournalReader(path.join(sandbox.runDirectory(id), journalLib.FILE_NAME));
-  const s = { id, kind, directory: dir, sandboxed: launch.sandboxed, backend: launch.backend, lease, term, status, reader, started: Date.now(), title: path.basename(dir) };
+  const s = { id, kind, login, directory: dir, sandboxed: launch.sandboxed, backend: launch.backend, lease, term, status, reader, started: Date.now(), title: path.basename(dir) };
   sessions.set(id, s);
   term.onData((d) => { status.data(d); send('session:data', { id, data: d }); });
   term.onExit(({ exitCode }) => { status.exit(exitCode); send('session:exit', { id, code: exitCode }); });

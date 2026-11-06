@@ -26,6 +26,20 @@
   const run = async (cmd, ms = 2500) => { out.length = 0; h.input(s.id, cmd + '\r'); await wait(ms); return strip(out.join('')); };
   const denied = (t) => /denied|verweigert|Zugriff|Access/i.test(t);
   r.echo = (await run('echo hearth-smoke-ok')).includes('hearth-smoke-ok');
+  // ---- terminal: right-click copies a selection / pastes, links are recognised, odd links are refused ----
+  const tm = state.terms.get(s.id);
+  tm.term.selectAll();
+  tm.host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  await wait(500);
+  r.rightClickCopies = (await h.clipboard.read()).includes('hearth-smoke-ok') && !tm.term.hasSelection();
+  await h.clipboard.write('echo pasted-by-menu');
+  out.length = 0;
+  tm.host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  await wait(500); h.input(s.id, '\r'); await wait(1500);
+  r.rightClickPastes = strip(out.join('')).includes('pasted-by-menu');
+  r.linkProviders = tm.term._core?._linkProviderService?.linkProviders?.length ?? -1;
+  r.badLinksRefused = (await Promise.all(['file:///C:/Windows/win.ini', 'http://evil.example.com/', 'javascript:alert(1)', 'https://x y'].map((u) => h.open(u).then(() => false, () => true)))).every(Boolean);
+
   r.secretReadBlocked = denied(await run('type "' + SECRET + '"'));
   r.projectRead = (await run('type package.json')).includes('hearth-ide-windows-fixture');
   await run('echo sandbox-ok> sandbox-write-test.tmp');

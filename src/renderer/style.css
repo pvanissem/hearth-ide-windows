@@ -204,3 +204,4 @@ dialog.search { overflow: hidden; }
 .tabs > button { border: 0; background: transparent; color: var(--dim); padding: 7px 10px; border-radius: var(--r-sm) var(--r-sm) 0 0; position: relative; }
 .tabs > button:hover:not(:disabled) { background: var(--panel2); color: var(--fg); }
 .tabs > button.active { color: var(--fg); } .tabs > button.active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+.hint-bar { padding: 8px 14px; background: var(--accent-soft); color: var(--fg); border-bottom: 1px solid var(--accent-line); font-size: 12.5px; }

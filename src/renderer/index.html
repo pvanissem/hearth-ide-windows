@@ -42,6 +42,7 @@
         <span class="pill" id="ch-status"></span><span class="pill ok" id="ch-sandbox"></span>
         <button class="ib" id="ch-stop" data-i18n-title="Stop agent"><i data-ico="stop" data-size="15"></i></button>
       </div>
+      <div id="login-hint" class="hint-bar" hidden><span data-i18n>Sign-in: click the link in the terminal (it opens in your browser), then paste the code here with Ctrl+V or a right-click.</span></div>
       <div id="terminals"></div>
       <div id="empty" class="empty"><div class="box"><h2>Hearth <b>IDE</b></h2><p class="hint" data-i18n>Start an agent to begin.</p></div></div>
     </section>
@@ -201,12 +202,14 @@
 
 <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
 <script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
 <script src="../../node_modules/mermaid/dist/mermaid.min.js"></script>
 <script src="icons.js"></script>
 <script src="i18n.js"></script>
 <script src="i18n-de.js"></script>
 <script src="themes.js"></script>
+<script src="term-keys.js"></script>
 <script src="layout-model.js"></script>
 <script src="layout.js"></script>
 <script src="app.js"></script>

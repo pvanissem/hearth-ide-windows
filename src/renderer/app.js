@@ -96,6 +96,7 @@ function renderChatHead() {
   const st = $('#ch-status'); st.className = `pill ${cls}`; st.textContent = t(label);
   const sb = $('#ch-sandbox'); sb.className = `pill ${s.sandboxed ? 'ok' : 'raw'}`; sb.innerHTML = Icons.html('shield', 12) + (s.sandboxed ? t('sandbox') : t('NO SANDBOX'));
   $('#ch-stop').disabled = s.status === 'done' || s.status === 'failed';
+  $('#login-hint').hidden = !(s.login && s.status !== 'done' && s.status !== 'failed');
 }
 $('#ch-stop').addEventListener('click', () => { const s = cur(); if (s) window.hearth.stop(s.id); });
 $('#btn-start2').addEventListener('click', () => $('#btn-start').click());
@@ -129,7 +130,27 @@ function attachTerminal(s) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
-  term.attachCustomKeyEventHandler((e) => !(e.ctrlKey && !e.altKey && ['k', 'K'].includes(e.key) && e.type === 'keydown' && (fire('hearth:search'), true)));
+  // Links in the output (also long ones that wrap, and OSC 8 hyperlinks like Claude's sign-in link) open in the browser on click:
+  // the sandboxed agent cannot open a browser itself.
+  const openLink = (uri) => window.hearth.open(uri).catch((err) => alert(errMsg(err)));
+  term.loadAddon(new WebLinksAddon.WebLinksAddon((_e, uri) => openLink(uri)));
+  term.options.linkHandler = { activate: (_e, uri) => openLink(uri), allowNonHttpProtocols: false };
+  // Copy and paste like Windows Terminal (Ctrl+C copies a selection, right-click copies or pastes).
+  const copySelection = async () => { const sel = term.getSelection(); if (!sel) return; await window.hearth.clipboard.write(TermKeys.cleanCopy(sel)); term.clearSelection(); };
+  const pasteClipboard = async () => {
+    const text = await window.hearth.clipboard.read();
+    if (!text) return;
+    if (TermKeys.needsConfirm(text) && !confirm(t('Paste {n} lines into the terminal?', { n: text.replace(/[\r\n]+$/, '').split(/\r?\n/).length }))) return;
+    term.paste(text);
+  };
+  term.attachCustomKeyEventHandler((e) => {
+    const a = TermKeys.action(e, term.hasSelection());
+    if (a === 'pass') return true;
+    e.preventDefault();
+    if (a === 'search') fire('hearth:search'); else if (a === 'copy') copySelection(); else pasteClipboard();
+    return false;
+  });
+  host.addEventListener('contextmenu', (e) => { e.preventDefault(); if (term.hasSelection()) copySelection(); else pasteClipboard(); });
   term.onData((d) => window.hearth.input(s.id, d));
   term.onResize(({ cols, rows }) => window.hearth.resize(s.id, cols, rows));
   state.terms.set(s.id, { term, fit, host });
