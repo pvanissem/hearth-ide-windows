@@ -5,7 +5,7 @@ const path = require('node:path');
 const { validDomain } = require('./policy');
 
 const FILE = path.join(process.env.HEARTH_HOME || os.homedir(), '.hearth', 'settings.json');
-const DEFAULTS = { language: 'en', domains: [], ports: [], folders: [], gitSSH: true, allowUnsandboxed: false, backend: 'auto', network: 'internet' };
+const DEFAULTS = { language: 'en', domains: [], ports: [], folders: [], gitSSH: true, allowUnsandboxed: false, backend: 'auto', network: 'internet', theme: 'system', journal: true };
 
 function sanitize(raw) {
   const s = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw : {}) };
@@ -17,6 +17,8 @@ function sanitize(raw) {
   s.language = s.language === 'de' ? 'de' : 'en';
   s.backend = s.backend === 'wsl' ? 'wsl' : 'auto';
   s.network = s.network === 'none' ? 'none' : 'internet';
+  s.theme = ['system', 'hearthLight', 'darcula', 'storm'].includes(s.theme) ? s.theme : 'system';
+  s.journal = s.journal !== false;
   return s;
 }
 

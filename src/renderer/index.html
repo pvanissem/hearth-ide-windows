@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
 <title>Hearth IDE</title>
 <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="style.css">
@@ -10,69 +10,194 @@
 <body>
 <div id="app">
   <aside id="inbox">
-    <header><span class="logo">Hearth</span><button id="btn-start" class="primary">+ Start agent</button></header>
+    <header><span class="logo">Hearth</span><button id="btn-start" class="primary" data-i18n>+ Start agent</button></header>
     <div id="sandbox-banner" hidden></div>
     <ul id="session-list"></ul>
-    <footer><button id="btn-settings" class="ghost">Settings</button></footer>
+    <footer><button id="btn-search" class="ghost" data-i18n-title="Search everywhere (Shift Shift, Ctrl+K)" data-i18n>Search</button><button id="btn-settings" class="ghost" data-i18n>Settings</button></footer>
   </aside>
 
   <main id="center">
     <nav class="tabs" id="center-tabs">
-      <button data-tab="agent" class="active">Agent</button>
-      <button data-tab="editor">Editor <span id="editor-file"></span></button>
+      <button data-tab="agent" class="active" data-i18n>Agent</button>
+      <button data-tab="editor"><span data-i18n>Editor</span> <span id="editor-file"></span></button>
       <span class="spacer"></span><span id="session-meta"></span>
     </nav>
-    <section id="pane-agent" class="pane active"><div id="terminals"></div><div id="empty" class="empty">Start an agent to begin.</div></section>
+    <section id="pane-agent" class="pane active"><div id="terminals"></div><div id="empty" class="empty" data-i18n>Start an agent to begin.</div></section>
     <section id="pane-editor" class="pane">
-      <div id="editor-bar"><button id="btn-save" class="primary" disabled>Save (Ctrl+S)</button><span id="editor-status"></span></div>
+      <div id="editor-bar"><button id="btn-save" class="primary" disabled data-i18n>Save (Ctrl+S)</button><span id="editor-status"></span></div>
       <div id="monaco"></div>
+      <div id="usages" hidden>
+        <div class="usages-head"><strong id="usages-title"></strong><span class="spacer"></span><button id="usages-close" class="ghost">x</button></div>
+        <div id="usages-list"></div>
+      </div>
     </section>
   </main>
 
+  <div id="splitter" title="Drag to resize"></div>
+
   <aside id="inspector">
     <nav class="tabs" id="insp-tabs">
-      <button data-tab="files" class="active">Files</button>
-      <button data-tab="git">Git <span id="git-count"></span></button>
+      <button data-tab="files" class="active" data-i18n>Files</button>
+      <button data-tab="git"><span data-i18n>Git</span> <span id="git-count"></span></button>
+      <button data-tab="overview" data-i18n>Overview</button>
+      <button data-tab="tests" data-i18n>Tests</button>
+      <button data-tab="arch" data-i18n>Architecture</button>
+      <button data-tab="build" data-i18n>Build</button>
+      <button data-tab="ci" data-i18n>CI/CD</button>
     </nav>
+
     <section id="insp-files" class="pane active"><div id="tree"></div></section>
+
     <section id="insp-git" class="pane">
-      <div id="git-head"></div>
+      <div class="row wrap"><select id="git-branch" title="Branch"></select>
+        <button id="git-newbranch" class="ghost" data-i18n>New branch</button></div>
+      <div id="git-head" class="hint"></div>
+      <div class="row wrap">
+        <button id="git-fetch" class="ghost" data-i18n>Fetch</button><button id="git-pull" class="ghost" data-i18n>Pull</button>
+        <button id="git-push" class="ghost" data-i18n>Push</button><button id="git-pr" class="ghost" data-i18n>MR / PR</button>
+      </div>
+      <h4 data-i18n>Changes</h4>
+      <div class="row"><button id="git-stageall" class="ghost" data-i18n>Stage all</button><button id="git-unstageall" class="ghost" data-i18n>Unstage all</button></div>
       <div id="git-files"></div>
-      <textarea id="commit-msg" placeholder="Commit message"></textarea>
-      <div class="row"><button id="btn-commit" class="primary">Commit staged</button><button id="btn-refresh" class="ghost">Refresh</button></div>
+      <textarea id="commit-msg" data-i18n-ph="Commit message" placeholder="Commit message"></textarea>
+      <div class="row"><button id="btn-commit" class="primary" data-i18n>Commit staged</button><button id="btn-refresh" class="ghost" data-i18n>Refresh</button></div>
       <pre id="git-diff"></pre>
-      <h4>History</h4><ul id="git-log"></ul>
+      <h4 data-i18n>Stash</h4>
+      <div class="row wrap"><button id="stash-save" class="ghost" data-i18n>Stash changes</button></div>
+      <ul id="stash-list" class="plain"></ul>
+      <h4 data-i18n>Branches</h4>
+      <ul id="branch-list" class="plain"></ul>
+      <div id="merge-bar" class="row" hidden><span class="hint" data-i18n>A merge is in progress.</span><button id="merge-abort" data-i18n>Abort merge</button></div>
+      <h4 data-i18n>History</h4><ul id="git-log" class="plain"></ul>
+    </section>
+
+    <section id="insp-overview" class="pane">
+      <div class="row wrap"><select id="jr-filter"><option value="all" data-i18n>All</option><option value="step" data-i18n>Steps</option><option value="decision" data-i18n>Decisions</option><option value="question" data-i18n>Open</option></select>
+        <button id="jr-ask" class="ghost" data-i18n>Ask agent to record its work</button></div>
+      <div id="jr-current" class="hint"></div>
+      <div id="jr-tree"></div>
+    </section>
+
+    <section id="insp-tests" class="pane">
+      <div class="row wrap"><button id="tests-run" class="primary" data-i18n>Run tests</button><button id="tests-reload" class="ghost" data-i18n>Reload reports</button></div>
+      <div id="tests-summary" class="hint"></div>
+      <div id="tests-list"></div>
+      <pre id="tests-out" class="outbox" hidden></pre>
+    </section>
+
+    <section id="insp-arch" class="pane">
+      <div class="row wrap"><select id="arch-file"></select><button id="arch-reload" class="ghost" data-i18n>Reload</button></div>
+      <div id="arch-view"></div>
+    </section>
+
+    <section id="insp-build" class="pane">
+      <div id="build-tasks"></div>
+      <h4 data-i18n>Output</h4>
+      <div class="row"><span id="build-title" class="hint"></span><span class="spacer"></span><button id="build-stop" class="ghost" disabled data-i18n>Stop</button></div>
+      <pre id="build-out"></pre>
+    </section>
+
+    <section id="insp-ci" class="pane">
+      <div id="ci-head" class="hint"></div>
+      <div class="row wrap"><button id="ci-reload" class="ghost" data-i18n>Refresh</button><button id="ci-run" class="ghost" data-i18n>Run pipeline</button><button id="ci-token" class="ghost" data-i18n>Token...</button></div>
+      <div id="ci-list"></div>
+      <h4 id="ci-jobs-title"></h4>
+      <div id="ci-jobs"></div>
+      <pre id="ci-log" hidden></pre>
     </section>
   </aside>
 </div>
 
 <dialog id="dlg-start">
   <form method="dialog">
-    <h3>Start agent</h3>
-    <label>Agent <select id="start-kind"></select></label>
-    <label>Folder <span class="row"><input id="start-dir" readonly placeholder="Choose a project folder"><button type="button" id="btn-pick">Browse...</button></span></label>
+    <h3 data-i18n>Start agent</h3>
+    <label><span data-i18n>Agent</span> <select id="start-kind"></select></label>
+    <label><span data-i18n>Source</span>
+      <select id="start-source"><option value="folder" data-i18n>Existing folder</option><option value="clone" data-i18n>Clone repository</option></select></label>
+    <label id="row-clone" hidden><span data-i18n>Repository URL</span> <input id="start-url" placeholder="git@github.com:owner/repo.git"></label>
+    <label><span id="lbl-dir" data-i18n>Folder</span> <span class="row"><input id="start-dir" readonly data-i18n-ph="Choose a project folder" placeholder="Choose a project folder"><button type="button" id="btn-pick" data-i18n>Browse...</button></span></label>
+    <label class="check"><input type="checkbox" id="start-login"> <span data-i18n>Run the agent's login first</span></label>
     <p id="start-hint" class="hint"></p>
-    <div class="row end"><button value="cancel">Cancel</button><button id="btn-go" class="primary" value="go">Start</button></div>
+    <div class="row end"><button value="cancel" data-i18n>Cancel</button><button id="btn-go" class="primary" value="go" data-i18n>Start</button></div>
   </form>
 </dialog>
 
-<dialog id="dlg-settings">
+<dialog id="dlg-settings" class="wide">
   <form method="dialog">
-    <h3>Settings</h3>
-    <div id="env-info" class="hint"></div>
-    <label>Extra allowed domains (one per line) <textarea id="set-domains" rows="4"></textarea></label>
-    <label>Extra open ports (comma separated) <input id="set-ports"></label>
-    <label>Network for sandboxed agents <select id="set-network"><option value="internet">Internet (agents need their API)</option><option value="none">Offline</option></select></label>
-    <p class="hint">Files and processes are isolated by Windows (AppContainer). The domain list above is only enforced with the WSL2 backend.</p>
-    <label class="check"><input type="checkbox" id="set-ssh"> Git over SSH (read ~/.ssh in the Git sandbox)</label>
-    <label class="check danger"><input type="checkbox" id="set-unsandboxed"> Allow running agents WITHOUT a sandbox when no sandbox is available</label>
-    <div class="row end"><button value="cancel">Cancel</button><button id="btn-save-settings" class="primary" value="save">Save</button></div>
+    <h3 data-i18n>Settings</h3>
+    <div class="tabs" id="set-tabs">
+      <button type="button" data-tab="general" class="active" data-i18n>General</button>
+      <button type="button" data-tab="sandbox" data-i18n>Sandbox</button>
+      <button type="button" data-tab="creds" data-i18n>Credentials</button>
+      <button type="button" data-tab="about" data-i18n>About</button>
+    </div>
+    <div class="set-pane active" id="set-general">
+      <label><span data-i18n>Language</span> <select id="set-language"><option value="en">English</option><option value="de">Deutsch</option></select></label>
+      <label><span data-i18n>Theme</span> <select id="set-theme"></select></label>
+      <p class="hint" data-i18n>Hearth Light, Darcula and Storm also colour the editor, the syntax and the terminals.</p>
+      <label class="check"><input type="checkbox" id="set-journal"> <span data-i18n>Overview: give agents the hearth-journal command</span></label>
+    </div>
+    <div class="set-pane" id="set-sandbox">
+      <div id="env-info" class="hint"></div>
+      <label><span data-i18n>Network for sandboxed agents</span> <select id="set-network"><option value="internet" data-i18n>Internet (agents need their API)</option><option value="none" data-i18n>Offline</option></select></label>
+      <label><span data-i18n>Extra allowed domains (one per line)</span> <textarea id="set-domains" rows="3"></textarea></label>
+      <p class="hint" data-i18n>Files and processes are isolated by Windows (AppContainer). The domain list is only enforced with the WSL2 backend.</p>
+      <label><span data-i18n>Extra open ports (comma separated)</span> <input id="set-ports"></label>
+      <label><span data-i18n>Extra folders (one per line, prefix + for read/write)</span> <textarea id="set-folders" rows="3"></textarea></label>
+      <label class="check"><input type="checkbox" id="set-ssh"> <span data-i18n>Git over SSH (use ~/.ssh for push, pull and fetch)</span></label>
+      <label><span data-i18n>Sandbox backend</span> <select id="set-backend"><option value="auto" data-i18n>Automatic (Windows AppContainer)</option><option value="wsl">WSL2 + nono</option></select></label>
+      <label class="check danger"><input type="checkbox" id="set-unsandboxed"> <span data-i18n>Allow running agents WITHOUT a sandbox when no sandbox is available</span></label>
+    </div>
+    <div class="set-pane" id="set-creds">
+      <p class="hint" data-i18n>Stored encrypted with Windows (DPAPI), never in a repository.</p>
+      <h4 data-i18n>CI/CD tokens</h4>
+      <div id="cred-tokens"></div>
+      <div class="row"><input id="cred-host" placeholder="github.com / gitlab.com"><select id="cred-write"><option value="read" data-i18n>read</option><option value="write" data-i18n>write (MR/PR, run)</option></select><input id="cred-token" type="password" placeholder="token"><button type="button" id="cred-add" data-i18n>Save</button></div>
+      <h4 data-i18n>Environment variables for agents</h4>
+      <div id="cred-env"></div>
+      <div class="row"><input id="env-name" placeholder="ANTHROPIC_API_KEY"><input id="env-value" type="password" placeholder="value"><button type="button" id="env-add" data-i18n>Save</button></div>
+      <p class="hint" data-i18n>Environment variables are visible to the agent inside the sandbox.</p>
+    </div>
+    <div class="set-pane" id="set-about">
+      <p id="about-version"></p>
+      <div class="row"><button type="button" id="btn-update" data-i18n>Check for updates</button><span id="update-result" class="hint"></span></div>
+    </div>
+    <div class="row end"><button value="cancel" data-i18n>Close</button><button id="btn-save-settings" class="primary" value="save" data-i18n>Save</button></div>
   </form>
+</dialog>
+
+<dialog id="dlg-pr">
+  <form method="dialog">
+    <h3 data-i18n>Merge / pull request</h3>
+    <label><span data-i18n>Title</span> <input id="pr-title"></label>
+    <label><span data-i18n>Source branch</span> <input id="pr-source" readonly></label>
+    <label><span data-i18n>Target branch</span> <input id="pr-target"></label>
+    <label><span data-i18n>Description</span> <textarea id="pr-body" rows="4"></textarea></label>
+    <div class="row end"><button value="cancel" data-i18n>Cancel</button><button id="pr-create" class="primary" value="go" data-i18n>Create</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-search" class="search">
+  <input id="search-input" data-i18n-ph="Search files, text, symbols, sessions, tests, actions" placeholder="Search files, text, symbols, sessions, tests, actions" autocomplete="off">
+  <nav class="tabs" id="search-tabs"></nav>
+  <ul id="search-results"></ul>
+  <div class="hint" id="search-hint"></div>
 </dialog>
 
 <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="../../node_modules/monaco-editor/min/vs/loader.js"></script>
+<script src="../../node_modules/mermaid/dist/mermaid.min.js"></script>
+<script src="i18n.js"></script>
+<script src="i18n-de.js"></script>
+<script src="themes.js"></script>
 <script src="app.js"></script>
+<script src="view-git.js"></script>
+<script src="view-journal.js"></script>
+<script src="view-search.js"></script>
+<script src="view-build.js"></script>
+<script src="view-ci.js"></script>
+<script src="view-arch.js"></script>
+<script src="view-settings.js"></script>
 </body>
 </html>

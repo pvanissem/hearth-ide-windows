@@ -159,8 +159,51 @@ static class Program
         catch (Exception e) { Console.Error.WriteLine("hearth-sandbox: could not restore " + path + ": " + e.Message); }
     }
 
+    static string JsonString(string s)
+    {
+        var sb = new StringBuilder("\"");
+        foreach (var c in s)
+        {
+            if (c == '\\' || c == '"') sb.Append('\\').Append(c);
+            else if (c < 32 || (c >= 127 && c < 160)) sb.Append(' ');
+            else sb.Append(c);
+        }
+        return sb.Append('"').ToString();
+    }
+
+    // hearth-journal step|decision|question <id> [--parent ID] [--title T] [--status S] [--why T] [--rejected T]... [--answer T]
+    // Appends one JSON line to %HEARTH_JOURNAL%. Runs inside the sandbox (only that file is writable there).
+    static int JournalMain(string[] a)
+    {
+        string file = Environment.GetEnvironmentVariable("HEARTH_JOURNAL");
+        if (string.IsNullOrEmpty(file)) { Console.Error.WriteLine("hearth-journal: not inside a Hearth session"); return 2; }
+        if (a.Length < 3 || (a[1] != "step" && a[1] != "decision" && a[1] != "question"))
+        { Console.Error.WriteLine("usage: hearth-journal step|decision|question <id> [--parent ID] [--title T] [--status S] [--why T] [--rejected T]... [--answer T]"); return 2; }
+        var json = new StringBuilder("{\"t\":" + JsonString(a[1]) + ",\"id\":" + JsonString(a[2]));
+        var rejected = new List<string>();
+        for (int i = 3; i + 1 < a.Length; i += 2)
+        {
+            switch (a[i])
+            {
+                case "--parent": json.Append(",\"parent\":" + JsonString(a[i + 1])); break;
+                case "--title": json.Append(",\"title\":" + JsonString(a[i + 1])); break;
+                case "--status": json.Append(",\"status\":" + JsonString(a[i + 1])); break;
+                case "--why": json.Append(",\"why\":" + JsonString(a[i + 1])); break;
+                case "--answer": json.Append(",\"answer\":" + JsonString(a[i + 1])); break;
+                case "--rejected": rejected.Add(JsonString(a[i + 1])); break;
+                default: Console.Error.WriteLine("unknown option " + a[i]); return 2;
+            }
+        }
+        if (rejected.Count > 0) json.Append(",\"rejected\":[" + string.Join(",", rejected.ToArray()) + "]");
+        json.Append("}\n");
+        using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+        { var bytes = new UTF8Encoding(false).GetBytes(json.ToString()); fs.Write(bytes, 0, bytes.Length); }
+        return 0;
+    }
+
     static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "journal") return JournalMain(args);
         Options o;
         try { o = Parse(args); } catch (Exception e) { return Fail(e.Message); }
         string container = ContainerName(o.Name);

@@ -81,7 +81,7 @@ function sandboxError(message) {
  * mode 'none' = explicitly unsandboxed. Otherwise the native AppContainer helper is used,
  * or nono in WSL2 when the user chose that backend.
  */
-async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, extraArgs = [], settings = {}, mode, gitHosts = [], resumeID }) {
+async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, extraArgs = [], settings = {}, mode, gitHosts = [], resumeID, command, extraEnv = {}, secretEnv = {}, journal = false, cwd }) {
   const spec = AGENTS[kind] || AGENTS.shell;
   const det = await detect(false, settings.backend);
   const agentArgs = [...(spec.args || []), ...(purpose === 'agent' ? spec.resume(resumeID) : []), ...extraArgs];
@@ -109,13 +109,25 @@ async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, ex
       executable = native.resolveExecutable(spec.executable);
       if (!executable) throw sandboxError(`${spec.name} is not installed on this PC. Install it with: ${spec.install}`);
     }
+    const runDir = runDirectory(runID);
+    const env = { ...extraEnv };
+    let rawCommandLine;
+    if (command) {   // Build & Deployment, tests: one shell command line
+      executable = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'cmd.exe');
+      rawCommandLine = `"${executable}" /d /s /c "${command}"`;
+    }
+    if (journal) {   // hearth-journal on PATH, written to the run folder (the only Hearth folder the sandbox may write)
+      const bin = require('./journal').install(runDir, det.helper);
+      env.HEARTH_JOURNAL = path.join(runDir, require('./journal').FILE_NAME);
+      env.PATH = `${bin}${path.delimiter}${process.env.PATH || process.env.Path || ''}`;
+    }
     const helperArgs = native.buildArgs({
-      directory, runDir: runDirectory(runID), home, kind, settings, executable, args,
-      network: settings.network === 'none' ? 'none' : 'internet', runtime: native.runtimeFolders(),
+      directory, cwd, runDir, home, kind, settings, executable, args, rawCommandLine, env,
+      network: settings.network === 'none' && purpose === 'agent' ? 'none' : 'internet', runtime: native.runtimeFolders(),
     });
     return {
-      file: det.helper, args: helperArgs, cwd: directory, sandboxed: true, backend: 'native',
-      env: { ...process.env }, revoke: native.revokeArgs(helperArgs), helper: det.helper,
+      file: det.helper, args: helperArgs, cwd: cwd || directory, sandboxed: true, backend: 'native',
+      env: { ...process.env, ...(purpose === 'agent' ? secretEnv : {}) }, revoke: native.revokeArgs(helperArgs), helper: det.helper,
     };
   }
 
@@ -125,7 +137,7 @@ async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, ex
   });
   const profilePath = path.join(runDir, 'profile.json');
   fs.writeFileSync(profilePath, JSON.stringify(toProfile(policy), null, 2));
-  const inner = [spec.executable, ...agentArgs].map(shQuote).join(' ');
+  const inner = command ? ['bash', '-lc', command].map(shQuote).join(' ') : [spec.executable, ...agentArgs].map(shQuote).join(' ');
   const script = `cd ${shQuote(toWslPath(directory))} && exec nono run --profile ${shQuote(toWslPath(profilePath))} -- ${inner}`;
   return {
     file: 'wsl.exe', args: ['-d', det.distro, '-e', 'bash', '-lc', script],

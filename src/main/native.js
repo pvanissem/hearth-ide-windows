@@ -70,7 +70,11 @@ function privateEnvironment(home, extra = {}) {
   return {
     HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
     TEMP: path.join(home, 'Temp'), TMP: path.join(home, 'Temp'), npm_config_cache: path.join(home, 'npm-cache'),
-    npm_config_update_notifier: 'false', ...extra,
+    npm_config_update_notifier: 'false',
+    // An AppContainer cannot lstat the parent folders of the project (C:\ and friends). Node resolves
+    // modules with realpath, which stats every parent: switch that off inside the sandbox.
+    NODE_PRESERVE_SYMLINKS: '1', NODE_PRESERVE_SYMLINKS_MAIN: '1',
+    ...extra,
   };
 }
 
@@ -79,7 +83,7 @@ function privateEnvironment(home, extra = {}) {
  * @param {{directory:string, runDir:string, home:string, kind:string, settings:object, executable:string, args:string[], network:'none'|'internet', env?:object, runtime?:string[]}} r
  */
 function buildArgs(r) {
-  const a = ['--name', containerName(r.directory), '--net', r.network, '--cwd', r.directory];
+  const a = ['--name', containerName(r.directory), '--net', r.network, '--cwd', r.cwd || r.directory];
   const rw = [r.directory, r.home, r.runDir];
   const ro = [...(r.runtime || [])];
   for (const f of r.settings.folders || []) (f.write ? rw : ro).push(f.path);
@@ -88,7 +92,7 @@ function buildArgs(r) {
   a.push('--deny-write', path.join(r.directory, '.git', 'hooks'));
   const env = { ...privateEnvironment(r.home), ...(AGENTS[r.kind]?.env || {}), ...(r.env || {}) };
   for (const [k, v] of Object.entries(env)) a.push('--env', `${k}=${v}`);
-  a.push('--cmd64', Buffer.from(commandLine(r.executable, r.args), 'utf8').toString('base64'));
+  a.push('--cmd64', Buffer.from(r.rawCommandLine || commandLine(r.executable, r.args), 'utf8').toString('base64'));
   return a;
 }
 

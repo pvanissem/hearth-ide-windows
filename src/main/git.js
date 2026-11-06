@@ -8,7 +8,7 @@ const SAFE = ['-c', `core.hooksPath=${os.devNull}`, '-c', 'core.fsmonitor=false'
 
 function git(cwd, args, { input } = {}) {
   return new Promise((resolve, reject) => {
-    const child = execFile('git', [...SAFE, ...args], { cwd, windowsHide: true, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8' },
+    const child = execFile('git', [...SAFE, ...args], { cwd, windowsHide: true, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never' }, timeout: 120000 },
       (err, stdout, stderr) => (err ? reject(Object.assign(new Error((stderr || err.message).trim()), { code: err.code })) : resolve(stdout)));
     if (input != null) { child.stdin.end(input); }
   });
@@ -75,4 +75,68 @@ async function isRepo(cwd) {
   try { return (await git(cwd, ['rev-parse', '--is-inside-work-tree'])).trim() === 'true'; } catch { return false; }
 }
 
-module.exports = { status, diff, stage, unstage, commit, log, isRepo, parseStatus };
+// ---- branches, remotes, stash, merge ----
+/** Same rule as the macOS app: no option-like names, no odd characters. */
+function validRef(ref) {
+  return typeof ref === 'string' && /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,200}$/.test(ref) && !ref.includes('..') && !ref.endsWith('/') && !ref.endsWith('.lock');
+}
+const need = (ref) => { if (!validRef(ref)) throw new Error('Invalid branch name'); return ref; };
+
+function parseBranches(raw) {
+  return raw.split('\n').filter(Boolean).map((l) => {
+    const [name, head, upstream, remote] = l.split('\t');
+    return { name, current: head === '*', upstream: upstream || null, remote: remote === 'remote' };
+  }).filter((b) => !b.name.endsWith('/HEAD'));
+}
+
+async function branches(cwd) {
+  const local = await git(cwd, ['for-each-ref', '--format=%(refname:short)\t%(HEAD)\t%(upstream:short)\tlocal', 'refs/heads']);
+  const remote = await git(cwd, ['for-each-ref', '--format=%(refname:short)\t \t\tremote', 'refs/remotes']);
+  return parseBranches(local + remote);
+}
+
+const checkout = async (cwd, branch) => git(cwd, ['checkout', need(branch)]);
+const createBranch = async (cwd, name) => git(cwd, ['checkout', '-b', need(name)]);
+const fetch = (cwd) => git(cwd, ['fetch', '--prune']);
+const pull = (cwd) => git(cwd, ['pull', '--ff-only']);
+const stageAll = (cwd) => git(cwd, ['add', '-A']);
+const unstageAll = (cwd) => git(cwd, ['reset', '-q']);
+const merge = async (cwd, branch) => git(cwd, ['merge', '--no-edit', '--no-verify', need(branch)]);
+const mergeAbort = (cwd) => git(cwd, ['merge', '--abort']);
+async function mergeInProgress(cwd) {
+  try { await git(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']); return true; } catch { return false; }
+}
+
+/** Push never forces. A branch without upstream is published with -u. */
+async function push(cwd) {
+  const st = await status(cwd);
+  if (!st.branch) throw new Error('Detached HEAD: nothing to push');
+  if (st.upstream) return git(cwd, ['push']);
+  const remotes = (await git(cwd, ['remote'])).split('\n').filter(Boolean);
+  if (!remotes.length) throw new Error('This repository has no remote');
+  return git(cwd, ['push', '-u', remotes.includes('origin') ? 'origin' : remotes[0], st.branch]);
+}
+
+async function remoteUrl(cwd) {
+  try {
+    const remotes = (await git(cwd, ['remote'])).split('\n').filter(Boolean);
+    if (!remotes.length) return null;
+    return (await git(cwd, ['remote', 'get-url', remotes.includes('origin') ? 'origin' : remotes[0]])).trim();
+  } catch { return null; }
+}
+
+function parseStashes(raw) {
+  return raw.split('\n').filter(Boolean).map((l) => { const [ref, subject] = l.split('\x1f'); return { ref, subject }; });
+}
+const stashList = async (cwd) => parseStashes(await git(cwd, ['stash', 'list', '--format=%gd\x1f%s']));
+const stashSave = (cwd, message) => git(cwd, ['stash', 'push', '--include-untracked', ...(message ? ['-m', String(message).slice(0, 200)] : [])]);
+const stashRef = (ref) => { if (!/^stash@\{\d{1,3}\}$/.test(ref)) throw new Error('Invalid stash'); return ref; };
+const stashApply = async (cwd, ref) => git(cwd, ['stash', 'apply', stashRef(ref)]);
+const stashPop = async (cwd, ref) => git(cwd, ['stash', 'pop', stashRef(ref)]);
+const stashDrop = async (cwd, ref) => git(cwd, ['stash', 'drop', stashRef(ref)]);
+
+module.exports = {
+  status, diff, stage, unstage, commit, log, isRepo, parseStatus,
+  validRef, parseBranches, branches, checkout, createBranch, fetch, pull, push, stageAll, unstageAll, merge, mergeAbort, mergeInProgress,
+  remoteUrl, parseStashes, stashList, stashSave, stashApply, stashPop, stashDrop,
+};

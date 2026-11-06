@@ -48,8 +48,40 @@ test('helper arguments: writes only project, private home and run folder; hooks 
   assert.equal(env.USERPROFILE, 'C:\\h');
   assert.equal(env.HOME, 'C:\\h');
   assert.equal(env.TEMP, path.join('C:\\h', 'Temp'));
+  assert.equal(env.NODE_PRESERVE_SYMLINKS, '1');          // Node cannot lstat C:\ in an AppContainer
+  assert.equal(env.NODE_PRESERVE_SYMLINKS_MAIN, '1');
   const cmd = Buffer.from(pairs('--cmd64')[0], 'base64').toString('utf8');
   assert.equal(cmd, 'C:\\Windows\\System32\\cmd.exe /d');
+});
+
+test('leases: grants are removed only when the last user of a project is gone', () => {
+  const { Leases } = require('../src/main/leases');
+  const calls = [];
+  const leases = new Leases({ run: (h, a) => calls.push(['run', h, a.join(' ')]), runSync: (h, a) => calls.push(['sync', h, a.join(' ')]) });
+  const build = leases.acquire('C:\\Work\\Proj');
+  const tests = leases.acquire('c:\\work\\proj');            // same folder, another spelling, still starting
+  leases.attach(build, { helper: 'H', revoke: ['--name', 'x', '--rw', 'C:\\Work\\Proj', '--revoke'] });
+  assert.equal(leases.count('C:\\Work\\Proj'), 2);
+  assert.equal(leases.release(build), false);                 // the test run is still there: nothing is revoked
+  assert.equal(calls.length, 0);
+  leases.attach(tests, { helper: 'H', revoke: ['--name', 'x', '--rw', 'C:\\runs\\2', '--revoke'] });
+  assert.equal(leases.release(tests), true);
+  assert.deepEqual(calls.map((c) => c[0]), ['run', 'run']);   // both launches' grants are undone
+  assert.equal(leases.release(tests), false);                 // releasing twice does nothing
+  assert.equal(leases.count('C:\\Work\\Proj'), 0);
+});
+
+test('leases: a failed start releases its lease; app exit undoes everything synchronously', () => {
+  const { Leases } = require('../src/main/leases');
+  const calls = [];
+  const leases = new Leases({ run: () => calls.push('async'), runSync: (h, a) => calls.push(`sync:${a[0]}`) });
+  const failed = leases.acquire('C:\\A');
+  assert.equal(leases.release(failed), false);                // nothing was granted
+  assert.equal(leases.count('C:\\A'), 0);
+  const l = leases.acquire('C:\\B'); leases.attach(l, { helper: 'H', revoke: ['b', '--revoke'] });
+  leases.releaseAllSync();
+  assert.deepEqual(calls, ['sync:b']);
+  assert.equal(leases.count('C:\\B'), 0);
 });
 
 test('the real profile folder is never granted by default', () => {

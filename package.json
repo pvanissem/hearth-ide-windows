@@ -1,6 +1,7 @@
 {
   "name": "hearth-ide-windows",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "author": "Patrick van Issem <p.vanissem91@gmail.com>",
   "description": "Hearth IDE for Windows - sandboxed AI coding agents, inbox, editor and Git in one window",
   "main": "src/main/main.js",
   "license": "MIT",
@@ -18,10 +19,20 @@
     "productName": "Hearth IDE",
     "files": [
       "src/**",
-      "package.json"
+      "package.json",
+      "!**/node_modules/monaco-editor/{dev,esm,min-maps}/**",
+      "!**/node_modules/**/*.map"
     ],
+    "npmRebuild": false,
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false
     },
     "extraResources": [
       {
@@ -33,11 +44,12 @@
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "electron": "^45.2.3",
+    "mermaid": "^12.3.0",
     "monaco-editor": "^0.57.0",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
+    "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   }
 }
