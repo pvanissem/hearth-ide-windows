@@ -107,7 +107,8 @@ async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, ex
       args = ['/d'];
     } else {
       executable = native.resolveExecutable(spec.executable);
-      if (!executable) throw sandboxError(`${spec.name} is not installed on this PC. Install it with: ${spec.install}`);
+      if (!executable) throw sandboxError(`${spec.name} is not installed on this PC (not found on PATH). Install it with: ${spec.install}`);
+      try { fs.accessSync(executable, fs.constants.R_OK); } catch { throw sandboxError(`${spec.name} was found at ${executable}, but that file cannot be read.`); }
     }
     const runDir = runDirectory(runID);
     const env = { ...extraEnv };

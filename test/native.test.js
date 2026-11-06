@@ -84,6 +84,39 @@ test('leases: a failed start releases its lease; app exit undoes everything sync
   assert.equal(leases.count('C:\\B'), 0);
 });
 
+test('leases: grants left behind by a killed run are undone at the next start, but never those of a running instance', () => {
+  const fs = require('node:fs'); const os = require('node:os');
+  const { Leases } = require('../src/main/leases');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hearth-leases-'));
+  const helper = path.join(dir, 'helper.exe'); fs.writeFileSync(helper, '');
+  const state = path.join(dir, 'grants.json');
+  try {
+    const calls = [];
+    const first = new Leases({ run: (h, a) => calls.push(a.join(' ')), runSync: (h, a) => calls.push('sync ' + a.join(' ')) }, { stateFile: state });
+    const l = first.acquire('C:\\Work\\Proj');
+    first.attach(l, { helper, revoke: ['--name', 'x', '--rw', 'C:\\Work\\Proj', '--revoke'] });
+    assert.ok(fs.existsSync(state), 'grants are written down while they are in use');
+    // the app is killed here: nothing is released. The next start recovers.
+    const next = new Leases({ run: (h, a) => calls.push('recovered ' + a.join(' ')) }, { stateFile: state });
+    const saved = JSON.parse(fs.readFileSync(state, 'utf8'));
+    fs.writeFileSync(state, JSON.stringify({ ...saved, pid: 2147480000 }));        // an owner that is not running
+    assert.equal(next.recover(), 1);
+    assert.deepEqual(calls.filter((c) => c.startsWith('recovered')), ['recovered --name x --rw C:\\Work\\Proj --revoke']);
+    assert.ok(!fs.existsSync(state));
+    // a live owner (this process, seen from "another" instance): hands off
+    first.attach(l, { helper, revoke: ['--name', 'y', '--revoke'] });
+    fs.writeFileSync(state, JSON.stringify({ ...JSON.parse(fs.readFileSync(state, 'utf8')), pid: process.ppid || 1 }));
+    const other = new Leases({ run: () => calls.push('wrong') }, { stateFile: state });
+    if (process.ppid && process.ppid !== process.pid) { assert.equal(other.recover(), 0); assert.ok(fs.existsSync(state)); }
+    // a normal release clears the file; junk in the file never runs anything
+    first.release(l);
+    assert.ok(!fs.existsSync(state));
+    fs.writeFileSync(state, JSON.stringify({ pid: 1, items: [{ helper, args: ['--rw', 'C:\\x'] }, { helper: 5, args: [] }, { helper: path.join(dir, 'missing.exe'), args: ['--revoke'] }] }));
+    assert.equal(new Leases({ run: () => calls.push('junk') }, { stateFile: state }).recover(), 0);
+    assert.ok(!calls.includes('junk') && !calls.includes('wrong'));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the real profile folder is never granted by default', () => {
   const a = native.buildArgs(base).join(' ');
   assert.ok(!a.includes('.ssh'));

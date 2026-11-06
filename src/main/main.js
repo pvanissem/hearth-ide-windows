@@ -37,7 +37,10 @@ const creds = new Credentials({
 const leases = new Leases({
   run: (helper, args) => execFile(helper, args, { windowsHide: true }, () => { /* best effort */ }),
   runSync: (helper, args) => execFileSync(helper, args, { windowsHide: true, timeout: 20000 }),
-});
+}, { stateFile: path.join(process.env.HEARTH_HOME || require('node:os').homedir(), '.hearth', 'grants.json') });
+// An earlier run that was killed or crashed may have left grants behind (they would even stop Electron from starting
+// when a project contains the app itself): undo them before anything else.
+leases.recover({ sync: true });
 
 const send = (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); };
 const plainError = (e) => String((e && e.message) || e);

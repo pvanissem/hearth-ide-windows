@@ -301,7 +301,14 @@ static class Program
         var cmd = new StringBuilder(o.CommandLine);
         if (!Native.CreateProcessW(null, cmd, IntPtr.Zero, IntPtr.Zero, inherit, Native.EXTENDED_STARTUPINFO_PRESENT | Native.CREATE_UNICODE_ENVIRONMENT | Native.CREATE_SUSPENDED,
                 envPtr, o.Cwd, ref si, out pi))
-            return Fail("cannot start: " + new Win32Exception(Marshal.GetLastWin32Error()).Message);
+        {
+            // Say WHAT could not be started: a missing file and a file the sandbox may not read look alike otherwise.
+            var why = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+            string cl = o.CommandLine.TrimStart();
+            string first = cl.StartsWith("\"") ? cl.Substring(1, Math.Max(0, cl.IndexOf('"', 1) - 1)) : cl.Split(' ')[0];
+            string where = Path.IsPathRooted(first) ? (File.Exists(first) ? "the file exists but cannot be started" : "no such file") : "not found on PATH";
+            return Fail("cannot start: " + why + " [" + where + ": " + first + "; folder: " + (o.Cwd ?? "(none)") + "]");
+        }
         Native.AssignProcessToJobObject(job, pi.hProcess);
         Native.SetConsoleCtrlHandler(c => true, true); // Ctrl+C goes to the child, not to us
         Native.ResumeThread(pi.hThread);
