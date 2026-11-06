@@ -9,7 +9,7 @@
   const goTab = (tab, pane = 'inspector') => () => (pane === 'center' ? showCenter(tab) : showInspector(tab));
   function actions() {
     const a = [
-      [t('Start agent'), () => $('#btn-start').click()], [t('Open settings'), () => $('#btn-settings').click()],
+      [t('Start agent'), () => $('#btn-start').click()], [t('Open settings'), () => $('#btn-settings').click()], [t('Reset layout'), () => Layout.reset()],
       [t('Show files'), goTab('files')], [t('Show Git'), goTab('git')], [t('Show overview'), goTab('overview')], [t('Show tests'), goTab('tests')],
       [t('Show architecture'), goTab('arch')], [t('Show build & deployment'), goTab('build')], [t('Show CI/CD'), goTab('ci')],
       [t('Show agent'), goTab('agent', 'center')], [t('Show editor'), goTab('editor', 'center')],

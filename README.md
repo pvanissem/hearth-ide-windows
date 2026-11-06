@@ -31,9 +31,15 @@ architecture, build tasks and CI/CD.
 | Credentials: CI tokens (read/write) and environment variables for agents, encrypted with DPAPI | Keychain, nono proxy | DPAPI; variables are visible to the agent |
 | Update check | yes | checks GitHub releases (no auto-install) |
 
+**Panes.** Every view (Sessions, Agent, Editor, Files, Git, Overview, Tests, Architecture, Build, CI/CD) lives in a pane that holds
+tabs. Drag a tab into another pane, or onto a pane's edge to cut a new column or row (a flame preview shows where it lands).
+Each pane has text size ("AA"), split right/down, maximise (Esc restores) and close; narrow panes fold these into a "..." menu.
+Dividers are draggable (double-click evens them out), closed views come back through "+" , the pane chooser, Search Everywhere
+or "Reset layout". The layout is saved and restored.
+
 **Not (yet) in the Windows version**
 
-- Movable/splittable panes and extra windows: the layout is fixed (inbox | agent/editor | inspector, inspector width adjustable).
+- Extra windows: a pane cannot be torn off into its own window yet (everything lives in one window).
 - Per-host network domain allowlist and credential *proxy* (placeholder tokens) - see the sandbox limits below.
 - Status through agent hooks (`Notification`/`Stop`) and Codex `notify`: the inbox uses terminal activity and the bell instead.
 - Usage/limit displays per agent, iTerm2/Terminal.app integration, auto-install of updates, code signing.

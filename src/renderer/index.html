@@ -16,7 +16,10 @@
 </header>
 
 <div id="app">
-  <aside id="inbox">
+  <div id="layout"></div>
+  <!-- Views live here until the layout (layout.js) puts them into panes. -->
+  <div id="views">
+  <section id="view-sessions" class="pane" data-view="sessions">
     <div id="inbox-scroll">
       <div id="attn-wrap" hidden>
         <div class="sec"><span data-i18n>Needs attention</span><span class="pill run" id="attn-count"></span></div>
@@ -30,15 +33,9 @@
     </div>
     <div id="inbox-foot"><span id="sandbox-banner" hidden></span><span class="spacer"></span>
       <button id="btn-settings" class="ib" data-i18n-title="Settings"><i data-ico="sliders" data-size="17"></i></button></div>
-  </aside>
+  </section>
 
-  <main id="center">
-    <nav class="tabs" id="center-tabs">
-      <button data-tab="agent" class="active"><i data-ico="sparkles"></i><span data-i18n>Agent</span></button>
-      <button data-tab="editor"><i data-ico="file-code"></i><span><span data-i18n>Editor</span> <span id="editor-file"></span></span></button>
-      <span class="spacer"></span><span id="session-meta"></span>
-    </nav>
-    <section id="pane-agent" class="pane active">
+    <section id="pane-agent" class="pane" data-view="agent">
       <div id="chat-head" hidden>
         <span class="tile" id="ch-icon"></span>
         <div><div class="ct" id="ch-title"></div><div class="cs" id="ch-sub"></div></div>
@@ -48,7 +45,7 @@
       <div id="terminals"></div>
       <div id="empty" class="empty"><div class="box"><h2>Hearth <b>IDE</b></h2><p class="hint" data-i18n>Start an agent to begin.</p></div></div>
     </section>
-    <section id="pane-editor" class="pane">
+    <section id="pane-editor" class="pane" data-view="editor">
       <div id="editor-bar"><button id="btn-save" class="primary" disabled><i data-ico="save" data-size="14"></i><span data-i18n>Save (Ctrl+S)</span></button><span id="editor-status"></span></div>
       <div id="monaco"></div>
       <div id="usages" hidden>
@@ -56,24 +53,10 @@
         <div id="usages-list"></div>
       </div>
     </section>
-  </main>
 
-  <div id="splitter" title="Drag to resize"></div>
+    <section id="insp-files" class="pane" data-view="files"><div id="tree"></div></section>
 
-  <aside id="inspector">
-    <nav class="tabs" id="insp-tabs">
-      <button data-tab="files" class="active" data-i18n-title="Files"><i data-ico="folder"></i><span class="lbl" data-i18n>Files</span></button>
-      <button data-tab="git" data-i18n-title="Git"><i data-ico="git-branch"></i><span class="lbl"><span data-i18n>Git</span> <span id="git-count"></span></span></button>
-      <button data-tab="overview" data-i18n-title="Overview"><i data-ico="tree"></i><span class="lbl" data-i18n>Overview</span></button>
-      <button data-tab="tests" data-i18n-title="Tests"><i data-ico="flask"></i><span class="lbl" data-i18n>Tests</span></button>
-      <button data-tab="arch" data-i18n-title="Architecture"><i data-ico="workflow"></i><span class="lbl" data-i18n>Architecture</span></button>
-      <button data-tab="build" data-i18n-title="Build"><i data-ico="wrench"></i><span class="lbl" data-i18n>Build</span></button>
-      <button data-tab="ci" data-i18n-title="CI/CD"><i data-ico="activity"></i><span class="lbl" data-i18n>CI/CD</span></button>
-    </nav>
-
-    <section id="insp-files" class="pane active"><div id="tree"></div></section>
-
-    <section id="insp-git" class="pane">
+    <section id="insp-git" class="pane" data-view="git">
       <div class="gbranch">
         <div class="bn"><i data-ico="git-branch" data-size="17"></i><select id="git-branch" title="Branch"></select>
           <button id="git-newbranch" class="ib" data-i18n-title="New branch"><i data-ico="plus" data-size="16"></i></button></div>
@@ -102,33 +85,33 @@
       <div id="git-log"></div>
     </section>
 
-    <section id="insp-overview" class="pane">
+    <section id="insp-overview" class="pane" data-view="overview">
       <div class="row wrap"><select id="jr-filter" style="width:auto"><option value="all" data-i18n>All</option><option value="step" data-i18n>Steps</option><option value="decision" data-i18n>Decisions</option><option value="question" data-i18n>Open</option></select>
         <button id="jr-ask" class="ghost"><i data-ico="sparkles" data-size="14"></i><span data-i18n>Ask agent to record its work</span></button></div>
       <div id="jr-current" class="hint"></div>
       <div id="jr-tree"></div>
     </section>
 
-    <section id="insp-tests" class="pane">
+    <section id="insp-tests" class="pane" data-view="tests">
       <div class="row wrap"><button id="tests-run" class="primary"><i data-ico="play" data-size="13"></i><span data-i18n>Run tests</span></button><button id="tests-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Reload reports</span></button></div>
       <div id="tests-summary" class="hint"></div>
       <div id="tests-list"></div>
       <pre id="tests-out" class="outbox" hidden></pre>
     </section>
 
-    <section id="insp-arch" class="pane">
+    <section id="insp-arch" class="pane" data-view="arch">
       <div class="row wrap"><select id="arch-file" style="flex:1"></select><button id="arch-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Reload</span></button></div>
       <div id="arch-view"></div>
     </section>
 
-    <section id="insp-build" class="pane">
+    <section id="insp-build" class="pane" data-view="build">
       <div id="build-tasks"></div>
       <h4 data-i18n>Output</h4>
       <div class="row"><span id="build-title" class="hint"></span><span class="spacer"></span><button id="build-stop" class="ghost" disabled><i data-ico="stop" data-size="13"></i><span data-i18n>Stop</span></button></div>
       <pre id="build-out"></pre>
     </section>
 
-    <section id="insp-ci" class="pane">
+    <section id="insp-ci" class="pane" data-view="ci">
       <div id="ci-head" class="hint"></div>
       <div class="row wrap"><button id="ci-reload" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Refresh</span></button><button id="ci-run" class="ghost"><i data-ico="play" data-size="13"></i><span data-i18n>Run pipeline</span></button><button id="ci-token" class="ghost"><i data-ico="shield" data-size="14"></i><span data-i18n>Token...</span></button></div>
       <div id="ci-list"></div>
@@ -136,7 +119,7 @@
       <div id="ci-jobs"></div>
       <pre id="ci-log" hidden></pre>
     </section>
-  </aside>
+  </div><!-- #views -->
 </div>
 
 <dialog id="dlg-start">
@@ -167,6 +150,7 @@
       <label><span data-i18n>Theme</span> <select id="set-theme"></select></label>
       <p class="hint" data-i18n>Hearth, Hearth Light, Darcula and Storm also colour the editor, the syntax and the terminals.</p>
       <label class="check"><input type="checkbox" id="set-journal"> <span data-i18n>Overview: give agents the hearth-journal command</span></label>
+      <div class="row"><button type="button" id="btn-reset-layout"><span data-i18n>Reset layout</span></button></div>
     </div>
     <div class="set-pane" id="set-sandbox">
       <div id="env-info" class="hint"></div>
@@ -223,6 +207,8 @@
 <script src="i18n.js"></script>
 <script src="i18n-de.js"></script>
 <script src="themes.js"></script>
+<script src="layout-model.js"></script>
+<script src="layout.js"></script>
 <script src="app.js"></script>
 <script src="view-git.js"></script>
 <script src="view-journal.js"></script>

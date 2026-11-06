@@ -37,10 +37,13 @@ function bindTabs(navSel, panePrefix, onSwitch) {
     onSwitch?.(b.dataset.tab);
   }));
 }
-bindTabs('#center-tabs', 'pane-', (tab) => { if (tab === 'editor') state.editor?.layout(); if (tab === 'agent') fitCurrent(); });
-bindTabs('#insp-tabs', 'insp-', (tab) => fire('hearth:tab', tab));
-const showCenter = (tab) => document.querySelector(`#center-tabs [data-tab="${tab}"]`).click();
-const showInspector = (tab) => document.querySelector(`#insp-tabs [data-tab="${tab}"]`).click();
+const showCenter = (view) => Layout.show(view);
+const showInspector = (view) => Layout.show(view);
+// a view became the visible tab of its pane
+document.addEventListener("hearth:tab", (e) => { if (e.detail === "editor") state.editor?.layout(); if (e.detail === "agent") fitCurrent(); });
+// per-pane text size ("AA"): terminals and the editor scale their font, the other views use CSS zoom
+state.paneZoom = {};
+document.addEventListener("hearth:zoom", (e) => { const { view, step } = e.detail; if (state.paneZoom[view] === step) return; state.paneZoom[view] = step; if (view === "agent" || view === "editor") applyZoom(); });
 
 // ---------- inbox ----------
 const PILL = { starting: ['', 'Starting'], running: ['run', 'Running'], 'needs-input': ['warn', 'Needs input'], idle: ['', 'Idle'], done: ['ok', 'Done'], failed: ['bad', 'Failed'] };
@@ -77,7 +80,6 @@ function renderInbox() {
   $('#empty-inbox').hidden = list.length > 0;
   $('#empty').hidden = list.length > 0 ? true : false;
   const sel = cur();
-  $('#session-meta').textContent = sel ? sel.directory : '';
   const needs = list.filter((s) => s.status === 'needs-input').length;
   document.title = needs ? `(${needs}) Hearth IDE` : 'Hearth IDE';
   renderChatHead();
@@ -123,7 +125,7 @@ const BASE_FONT = 13;
 function attachTerminal(s) {
   const host = el('div', { class: 'term' });
   $('#terminals').append(host);
-  const term = new Terminal({ fontFamily: 'Cascadia Mono, Consolas, monospace', fontSize: BASE_FONT + state.zoom, cursorBlink: true, scrollback: 10000, theme: Themes.terminalTheme() });
+  const term = new Terminal({ fontFamily: 'Cascadia Mono, Consolas, monospace', fontSize: BASE_FONT + state.zoom + (state.paneZoom.agent || 0), cursorBlink: true, scrollback: 10000, theme: Themes.terminalTheme() });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
@@ -261,7 +263,7 @@ function ensureEditor() {
     require.config({ paths: { vs: '../../node_modules/monaco-editor/min/vs' } });
     window.MonacoEnvironment = { getWorkerUrl: () => 'data:text/javascript;charset=utf-8,' + encodeURIComponent('self.MonacoEnvironment={baseUrl:"' + new URL('../../node_modules/monaco-editor/min/', location.href).href + '"};importScripts("' + new URL('../../node_modules/monaco-editor/min/vs/base/worker/workerMain.js', location.href).href + '");') };
     require(['vs/editor/editor.main'], () => {
-      state.editor = monaco.editor.create($('#monaco'), { value: '', language: 'plaintext', theme: Themes.monacoTheme(monaco), automaticLayout: true, minimap: { enabled: false }, fontSize: BASE_FONT + state.zoom });
+      state.editor = monaco.editor.create($('#monaco'), { value: '', language: 'plaintext', theme: Themes.monacoTheme(monaco), automaticLayout: true, minimap: { enabled: false }, fontSize: BASE_FONT + state.zoom + (state.paneZoom.editor || 0) });
       state.editor.onDidChangeModelContent(() => { const d = state.docs.get(state.active); if (d && !d.loading) { d.dirty = true; renderDocs(); } });
       state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveFile);
       state.editor.addAction({ id: 'hearth.usages', label: t('Find usages'), keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.F7], contextMenuGroupId: 'navigation', contextMenuOrder: 1.5,
@@ -295,7 +297,7 @@ function renderDocs() {
   const d = state.docs.get(state.active);
   $('#btn-save').disabled = !(d && d.dirty);
   $('#editor-status').textContent = d ? (d.dirty ? t('modified') : d.status || state.active) : '';
-  $('#editor-file').textContent = d ? base(state.active) : '';
+  Layout.badge('editor', d ? base(state.active) : '');
 }
 
 function activateDoc(file) {
@@ -351,8 +353,8 @@ $('#btn-save').addEventListener('click', saveFile);
 
 // ---------- zoom (Ctrl +/-/0) ----------
 function applyZoom() {
-  for (const { term, fit } of state.terms.values()) { term.options.fontSize = BASE_FONT + state.zoom; try { fit.fit(); } catch { /* hidden */ } }
-  state.editor?.updateOptions({ fontSize: BASE_FONT + state.zoom });
+  for (const { term, fit } of state.terms.values()) { term.options.fontSize = BASE_FONT + state.zoom + (state.paneZoom.agent || 0); try { fit.fit(); } catch { /* hidden */ } }
+  state.editor?.updateOptions({ fontSize: BASE_FONT + state.zoom + (state.paneZoom.editor || 0) });
   try { localStorage.setItem('zoom', String(state.zoom)); } catch { /* private mode */ }
 }
 document.addEventListener('keydown', (e) => {
@@ -365,24 +367,13 @@ document.addEventListener('keydown', (e) => {
 });
 try { state.zoom = Number(localStorage.getItem('zoom')) || 0; } catch { /* private mode */ }
 
-// ---------- layout: resizable inspector ----------
-(() => {
-  const split = $('#splitter');
-  const apply = (w) => document.documentElement.style.setProperty('--insp-w', `${Math.max(280, Math.min(900, w))}px`);
-  try { const w = Number(localStorage.getItem('inspW')); if (w) apply(w); } catch { /* private mode */ }
-  split.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    const move = (ev) => apply(window.innerWidth - ev.clientX);
-    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); try { localStorage.setItem('inspW', String(Math.round(window.innerWidth - split.getBoundingClientRect().right + 6))); } catch { /* */ } fitCurrent(); state.editor?.layout(); };
-    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-  });
-})();
 
 document.addEventListener('hearth:lang', () => { renderInbox(); if (state.env) showSandboxState(); });
 
 // ---------- startup ----------
 (async () => {
   hydrateIcons();
+  Layout.init();
   state.settings = await window.hearth.getSettings();
   Themes.onChange((_name, p) => {
     for (const { term } of state.terms.values()) term.options.theme = Themes.terminalTheme();

@@ -49,7 +49,14 @@
     undo: '<path d="M4 9h11a5 5 0 0 1 0 10H8"/><path d="M8 5L4 9l4 4"/>',
     'help-circle': '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17v.1"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.600 3.800 5.600 3.800 9S14.500 18.400 12 21c-2.500-2.600-3.800-5.600-3.800-9S9.500 5.600 12 3z"/>',
-    package: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.300 7.500L12 12.500l8.700-5"/><path d="M12 12.500V21"/>',
+    inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.900A2 2 0 0 0 16.700 4H7.300a2 2 0 0 0-1.800 1.100z"/>',
+    maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    minimize: '<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>',
+    'split-h': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+    'split-v': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/>',
+    'text-size': '<path d="M3 19l5-13 5 13"/><path d="M5 14h6"/><path d="M15 19l3.500-8.500L22 19"/><path d="M16.200 16.500h4.600"/>',
+    layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
+    package:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.300 7.500L12 12.500l8.700-5"/><path d="M12 12.500V21"/>',
   };
 
   const html = (name, size = 16, cls = '') => `<svg class="ico ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.file}</svg>`;

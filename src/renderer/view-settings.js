@@ -4,6 +4,7 @@
   const save = async (patch) => { state.settings = await window.hearth.setSettings({ ...state.settings, ...patch }); return state.settings; };
 
   bindTabs('#set-tabs', 'set-');
+  $('#btn-reset-layout').addEventListener('click', () => Layout.reset());
   // Theme choices
   for (const [id, name] of Themes.list) $('#set-theme').append(el('option', { value: id }, id === 'system' ? 'System' : name));
   // Live preview of language and theme

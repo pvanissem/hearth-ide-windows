@@ -38,7 +38,7 @@
   await run('hearth-journal step s1 --title "Plan the work" --status running', 1500);
   await run('hearth-journal decision d1 --parent s1 --title "Use SQLite" --why "no server needed" --rejected "Postgres"', 1500);
   await run('hearth-journal question q1 --parent s1 --title "Which port?"', 1500);
-  click('#insp-tabs [data-tab="overview"]');
+  Layout.show('overview');
   r.journalNodes = await until(async () => { const n = document.querySelectorAll('#jr-tree .jn').length; return n >= 3 ? n : 0; }, 8000);
   r.journalWhy = $('#jr-tree').textContent.includes('no server needed') && $('#jr-tree').textContent.includes('Postgres');
   await shot('overview');
@@ -78,7 +78,7 @@
   r.initialsMatch = (await h.search.files(SMOKE_DIR, 'ht')).some((x) => x.rel.endsWith('hello-tools.js'));
 
   // ---- Build & Deployment (runs in the sandbox) ----
-  click('#insp-tabs [data-tab="build"]');
+  Layout.show('build');
   r.buildTasks = await until(async () => { const n = document.querySelectorAll('#build-tasks .task').length; return n >= 2 ? n : 0; }, 6000);
   const buildRow = [...document.querySelectorAll('#build-tasks .task')].find((t) => t.textContent.includes('run build'));
   buildRow.querySelector('button').click();
@@ -87,7 +87,7 @@
   await shot('build');
 
   // ---- Tests: run the project's test task in the sandbox, read the JUnit report ----
-  click('#insp-tabs [data-tab="tests"]');
+  Layout.show('tests');
   click('#tests-run');
   r.testsRan = Boolean(await until(() => $('#tests-out').textContent.includes('tests done') && /\[(failed|finished)/.test($('#tests-out').textContent), 60000));
   r.testsSummary = Boolean(await until(() => /2 tests: 1 passed, 1 failed/.test($('#tests-summary').textContent), 8000));
@@ -95,12 +95,12 @@
   await shot('tests');
 
   // ---- Architecture (Mermaid) ----
-  click('#insp-tabs [data-tab="arch"]');
+  Layout.show('arch');
   r.archDiagram = Boolean(await until(() => document.querySelectorAll('#arch-view svg').length >= 1, 15000));
   await shot('architecture');
 
   // ---- Git ----
-  click('#insp-tabs [data-tab="git"]');
+  Layout.show('git');
   await until(() => document.querySelectorAll('#git-files .gf').length >= 1, 8000);
   r.gitRows = document.querySelectorAll('#git-files .gf').length;
   await h.git.stageAll(SMOKE_DIR);
@@ -113,7 +113,7 @@
   await shot('git');
 
   // ---- CI/CD (no remote in the fixture) ----
-  click('#insp-tabs [data-tab="ci"]');
+  Layout.show('ci');
   r.ciNoRemote = Boolean(await until(() => $('#ci-head').textContent.includes('No GitHub or GitLab remote'), 5000));
 
   // ---- German UI ----
@@ -124,11 +124,78 @@
   r.chatHeadShown = !$('#chat-head').hidden;
   r.fontsLoaded = document.fonts.check('13px "Hanken Grotesk"') && document.fonts.check('13px "Azeret Mono"');
   r.titlebarBrand = $('#titlebar .brand').textContent.trim();
-  r.germanTab = $('#insp-tabs [data-tab="overview"]').textContent;
-  click('#insp-tabs [data-tab="files"]');
+  r.germanTab = document.querySelector('.gtab[data-view-tab="overview"] .lbl').textContent;
+  Layout.show('files');
   await shot('german');
   I18n.set('en'); await wait(100);
   r.englishBack = $('#btn-start2').textContent;
+
+  // ---- Panes: drag and drop, split, chooser, maximise, text size, divider, close, persistence ----
+  Layout.reset(); await wait(400);
+  Layout.show('agent'); await wait(200);
+  r.panesDefault = Layout.groupCount();
+  r.tabsRendered = document.querySelectorAll('.gtab').length;
+  const gOf = (v) => document.querySelector('.gtab[data-view-tab="' + v + '"]')?.closest('.group');
+  const dnd = async (view, groupEl, zone) => {
+    const tab = document.querySelector('.gtab[data-view-tab="' + view + '"]');
+    const dt = new DataTransfer();
+    tab.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+    await wait(120);
+    const zoneEl = groupEl.querySelector('.dropzone');
+    const rc = zoneEl.getBoundingClientRect();
+    const [fx, fy] = { center: [0.5, 0.5], left: [0.08, 0.5], right: [0.92, 0.5], top: [0.5, 0.06], bottom: [0.5, 0.94] }[zone];
+    const ev = (type) => new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt, clientX: rc.left + rc.width * fx, clientY: rc.top + rc.height * fy });
+    zoneEl.dispatchEvent(ev('dragover')); await wait(60);
+    const preview = groupEl.querySelector('.dz-preview');
+    const shown = getComputedStyle(preview).display !== 'none' ? preview.dataset.zone : null;
+    zoneEl.dispatchEvent(ev('drop')); await wait(400);
+    return shown;
+  };
+  r.dropPreview = await dnd('git', gOf('agent'), 'right');                        // flame preview on the right half
+  r.afterEdgeDrop = Layout.groupCount();
+  r.gitOwnPane = gOf('git') !== gOf('files') && Layout.model.groupOf(Layout.tree, 'git').views.length === 1;
+  r.gitStillWorks = Boolean(await until(() => $('#git-branch').options.length >= 1 && $('#git-head').textContent.length > 0, 6000));
+  await shot('panes-split');
+  const merged = await dnd('git', gOf('files'), 'center');
+  r.afterCenterDrop = Layout.groupCount();
+  r.mergedPreview = merged;
+  r.ownEdgeIsNoop = (await dnd('sessions', gOf('sessions'), 'left')) === null && Layout.groupCount() === r.afterCenterDrop;
+  // split with the pane button -> empty pane with a chooser -> pick a view
+  gOf('agent').querySelector('.gbtn[title="Split right"]').click(); await wait(250);
+  r.chooserShown = Boolean(document.querySelector('.chooser'));
+  [...document.querySelectorAll('.chooser .cbtn')].find((b) => b.textContent.trim() === 'Tests').click(); await wait(300);
+  r.chooserPicked = !document.querySelector('.chooser') && Layout.groupCount() === 4 && Layout.isVisible('tests');
+  // maximise and restore
+  gOf('agent').querySelector('.gbtn[title="Maximize"]').click(); await wait(200);
+  r.maximised = Boolean(document.querySelector('.group.max'));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(200);
+  r.restored = !document.querySelector('.group.max');
+  // text size of one pane
+  gOf('files').querySelector('.gbtn[title="Text size"]').click(); await wait(100);
+  [...document.querySelectorAll('.menu .mi')].find((b) => b.textContent.includes('Larger text')).click(); await wait(250);
+  r.paneZoom = document.getElementById('insp-files').style.zoom;
+  // drag a divider
+  const gut = document.querySelector('.gutter.sp-row');
+  const before = Layout.tree.sizes ? Layout.tree.sizes[0] : 0;
+  const gr = gut.getBoundingClientRect();
+  gut.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: gr.left + 2, clientY: gr.top + 100 }));
+  document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: gr.left + 82, clientY: gr.top + 100 }));
+  document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  await wait(200);
+  r.dividerMoved = Layout.tree.sizes[0] > before + 0.02;
+  // saved layout
+  const stored = JSON.parse(localStorage.getItem('hearth.layout.v1') || 'null');
+  r.layoutSaved = Boolean(stored) && Layout.model.groups(stored).length === Layout.groupCount();
+  r.restoredFromStorage = Layout.model.sanitize(stored) != null;
+  // close a pane: its views are hidden but can come back
+  gOf('tests').querySelector('.gbtn[title="Close pane"]').click(); await wait(250);
+  r.closedHides = Layout.hidden().includes('tests') && !Layout.isVisible('tests');
+  Layout.show('tests'); await wait(250);
+  r.shownAgain = Layout.isVisible('tests');
+  await shot('panes-final');
+  Layout.reset(); await wait(300);
+  r.resetLayout = Layout.groupCount() === 3 && Layout.hidden().length === 0;
+  Layout.show('git');
 
   // ---- Settings + credentials ----
   click('#btn-settings'); await wait(500);
@@ -141,11 +208,11 @@
   await h.creds.deleteEnv('SMOKE_API_KEY');
   $('#dlg-settings').close();
 
-  document.querySelector('#center-tabs [data-tab="agent"]').click();
+  Layout.show('agent');
   await wait(500);
   await shot('final');
   // the default look, and the light one
-  document.querySelector('#insp-tabs [data-tab="git"]').click();
+  Layout.show('git');
   Themes.apply('hearthLight'); await wait(500); await shot('light');
   Themes.apply('hearth'); await wait(500); await shot('hearth');
   r.emptyHidden = getComputedStyle($('#empty')).display === 'none';

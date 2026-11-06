@@ -43,12 +43,12 @@
     $('#git-log').replaceChildren(); $('#stash-list').replaceChildren();
     const head = $('#git-head');
     if (!d) { head.textContent = t('No session selected'); $('#git-branch').replaceChildren(); return; }
-    if (!(await H.isRepo(d))) { head.textContent = t('Not a Git repository'); $('#git-count').textContent = ''; $('#git-count2').textContent = '0'; $('#git-branch').replaceChildren(); allBranches = []; drawBranches(); return; }
+    if (!(await H.isRepo(d))) { head.textContent = t('Not a Git repository'); Layout.badge('git', ''); $('#git-count2').textContent = '0'; $('#git-branch').replaceChildren(); allBranches = []; drawBranches(); return; }
     const [st, branches, stashes, merging, nums, log] = await Promise.all([H.status(d), H.branches(d).catch(() => []), H.stashList(d).catch(() => []), H.mergeInProgress(d).catch(() => false), H.numstat(d).catch(() => ({})), H.log(d).catch(() => [])]);
     current = st.branch;
     head.textContent = st.upstream ? `${st.upstream}${st.ahead ? `  ↑${st.ahead}` : ''}${st.behind ? `  ↓${st.behind}` : ''}` : t('No upstream');
     $('#git-pull').disabled = !st.upstream;
-    $('#git-count').textContent = st.files.length ? `(${st.files.length})` : '';
+    Layout.badge('git', st.files.length ? `(${st.files.length})` : '');
     $('#git-count2').textContent = String(st.files.length);
     $('#merge-bar').hidden = !merging;
 

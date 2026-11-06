@@ -1,6 +1,10 @@
 'use strict';
 // German texts. The key is the English source text (see scripts/i18n-strings.js --missing).
 I18n.register('de', {
+  // panes
+  'Close view': 'Ansicht schließen', 'Larger text': 'Größerer Text', 'Smaller text': 'Kleinerer Text', 'Reset text size': 'Textgröße zurücksetzen', 'Text size': 'Textgröße',
+  'Split right': 'Rechts teilen', 'Split down': 'Unten teilen', 'Restore size': 'Normale Größe', 'Maximize': 'Maximieren', 'Add view': 'Ansicht hinzufügen', 'Close pane': 'Bereich schließen',
+  'Reset layout': 'Layout zurücksetzen', 'More': 'Mehr', 'Choose a view': 'Ansicht wählen', 'Pick what this pane should show.': 'Wähle, was dieser Bereich zeigen soll.',
   // design pass
   'Agents': 'Agenten', 'Needs attention': 'Braucht Aufmerksamkeit', 'No agents yet.': 'Noch keine Agenten.', 'Search everywhere': 'Überall suchen', 'Stop agent': 'Agent stoppen',
   '{n} sessions with activity, results, questions or errors.': '{n} Sitzungen mit Aktivität, Ergebnissen, Rückfragen oder Fehlern.', '{n} active': '{n} aktiv',
