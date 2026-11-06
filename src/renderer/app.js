@@ -13,6 +13,14 @@ const errMsg = (e) => String((e && e.message) || e).replace(/^Error invoking rem
 const cur = () => state.sessions.get(state.selected) || null;
 const base = (p) => String(p).split(/[\\/]/).pop();
 const fire = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }));
+/** A short message at the bottom of the window (gone after a moment). */
+let toastTimer = null;
+function toast(text) {
+  let box = document.getElementById('toast');
+  if (!box) { box = el('div', { id: 'toast', role: 'status' }); document.body.append(box); }
+  box.textContent = text; box.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => box.classList.remove('on'), 3500);
+}
 /** Fill <i data-ico="name" data-size="16"> placeholders with the SVG icon. */
 function hydrateIcons(root = document) {
   for (const n of root.querySelectorAll('i[data-ico]')) { n.outerHTML = Icons.html(n.dataset.ico, Number(n.dataset.size) || 16); }
@@ -110,6 +118,7 @@ function select(id) {
   renderInbox();
   fitCurrent();
   fire('hearth:select', s);
+  setTimeout(focusTerminal, 80);
 }
 
 async function closeSession(id) {
@@ -136,12 +145,15 @@ function attachTerminal(s) {
   term.loadAddon(new WebLinksAddon.WebLinksAddon((_e, uri) => openLink(uri)));
   term.options.linkHandler = { activate: (_e, uri) => openLink(uri), allowNonHttpProtocols: false };
   // Copy and paste like Windows Terminal (Ctrl+C copies a selection, right-click copies or pastes).
-  const copySelection = async () => { const sel = term.getSelection(); if (!sel) return; await window.hearth.clipboard.write(TermKeys.cleanCopy(sel)); term.clearSelection(); };
+  const copySelection = async () => { const sel = term.getSelection(); if (!sel) return; await window.hearth.clipboard.write(TermKeys.cleanCopy(sel)); term.clearSelection(); toast(t('Copied')); };
   const pasteClipboard = async () => {
     const text = await window.hearth.clipboard.read();
-    if (!text) return;
+    if (!text) { toast(t('The clipboard is empty')); return; }
     if (TermKeys.needsConfirm(text) && !confirm(t('Paste {n} lines into the terminal?', { n: text.replace(/[\r\n]+$/, '').split(/\r?\n/).length }))) return;
     term.paste(text);
+    term.focus();
+    // Some prompts (the sign-in code of an agent) show nothing while you paste: say that it arrived.
+    toast(t('Pasted {n} characters. Some prompts do not show them; press Enter to send.', { n: text.replace(/[\r\n]+$/, '').length }));
   };
   term.attachCustomKeyEventHandler((e) => {
     const a = TermKeys.action(e, term.hasSelection());
@@ -151,10 +163,23 @@ function attachTerminal(s) {
     return false;
   });
   host.addEventListener('contextmenu', (e) => { e.preventDefault(); if (term.hasSelection()) copySelection(); else pasteClipboard(); });
+  // A click anywhere in the pane (also on its padding) puts the cursor into the terminal, so typing and Ctrl+V work.
+  host.addEventListener('mousedown', () => setTimeout(() => { if (!term.hasSelection()) term.focus(); }, 0));
+  s.focusTerminal = () => term.focus();
   term.onData((d) => window.hearth.input(s.id, d));
   term.onResize(({ cols, rows }) => window.hearth.resize(s.id, cols, rows));
   state.terms.set(s.id, { term, fit, host });
 }
+/** Give the keyboard to the selected session's terminal (when nothing else, like a dialog or an input, has it). */
+function focusTerminal() {
+  const t0 = state.terms.get(state.selected);
+  const a = document.activeElement;
+  const free = !a || a === document.body || a.classList?.contains('xterm-helper-textarea');
+  if (t0 && free && !document.querySelector('dialog[open]') && Layout.isActive('agent')) t0.term.focus();
+}
+// Coming back from the browser (sign-in!) the window has the focus but no element does: Ctrl+V would go nowhere.
+window.addEventListener('focus', () => setTimeout(focusTerminal, 50));
+document.addEventListener('hearth:tab', (e) => { if (e.detail === 'agent') setTimeout(focusTerminal, 50); });
 function fitCurrent() {
   const term = state.terms.get(state.selected);
   if (!term) return;

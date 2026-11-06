@@ -3,7 +3,9 @@
 I18n.register('de', {
   // terminal
   'Paste {n} lines into the terminal?': '{n} Zeilen ins Terminal einfügen?',
-  'Sign-in: click the link in the terminal (it opens in your browser), then paste the code here with Ctrl+V or a right-click.': 'Anmeldung: Klicke auf den Link im Terminal (er öffnet sich im Browser) und füge den Code danach mit Strg+V oder Rechtsklick hier ein.',
+  'Sign-in: click the link in the terminal (it opens in your browser), then paste the code here with Ctrl+V or a right-click. The code is not shown while you paste; press Enter to send it.': 'Anmeldung: Klicke auf den Link im Terminal (er öffnet sich im Browser) und füge den Code danach mit Strg+V oder Rechtsklick hier ein. Der Code wird beim Einfügen nicht angezeigt; sende ihn mit Enter.',
+  'Copied': 'Kopiert', 'The clipboard is empty': 'Die Zwischenablage ist leer',
+  'Pasted {n} characters. Some prompts do not show them; press Enter to send.': '{n} Zeichen eingefügt. Manche Eingaben zeigen sie nicht an; sende mit Enter.',
   // panes
   'Close view': 'Ansicht schließen', 'Larger text': 'Größerer Text', 'Smaller text': 'Kleinerer Text', 'Reset text size': 'Textgröße zurücksetzen', 'Text size': 'Textgröße',
   'Split right': 'Rechts teilen', 'Split down': 'Unten teilen', 'Restore size': 'Normale Größe', 'Maximize': 'Maximieren', 'Add view': 'Ansicht hinzufügen', 'Close pane': 'Bereich schließen',

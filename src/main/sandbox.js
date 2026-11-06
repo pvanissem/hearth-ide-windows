@@ -123,7 +123,7 @@ async function prepare({ purpose = 'agent', kind = 'shell', runID, directory, ex
       env.PATH = `${bin}${path.delimiter}${process.env.PATH || process.env.Path || ''}`;
     }
     const helperArgs = native.buildArgs({
-      directory, cwd, runDir, home, kind, settings, executable, args, rawCommandLine, env,
+      directory, cwd, runDir, home, kind, settings, executable, args, rawCommandLine, env, exclude: native.appFolders(directory),
       network: settings.network === 'none' && purpose === 'agent' ? 'none' : 'internet', runtime: native.runtimeFolders(),
     });
     return {

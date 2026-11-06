@@ -37,6 +37,7 @@
   tm.host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   await wait(500); h.input(s.id, '\r'); await wait(1500);
   r.rightClickPastes = strip(out.join('')).includes('pasted-by-menu');
+  r.pasteToast = document.getElementById('toast')?.classList.contains('on') === true;
   r.linkProviders = tm.term._core?._linkProviderService?.linkProviders?.length ?? -1;
   r.badLinksRefused = (await Promise.all(['file:///C:/Windows/win.ini', 'http://evil.example.com/', 'javascript:alert(1)', 'https://x y'].map((u) => h.open(u).then(() => false, () => true)))).every(Boolean);
 

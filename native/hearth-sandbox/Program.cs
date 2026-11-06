@@ -17,6 +17,7 @@ using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 
 static class Native
 {
@@ -63,7 +64,7 @@ class Options
 {
     public string Name = "default", Net = "none", Cwd;
     public bool Pipes, Revoke, PrintSid;
-    public List<string> Rw = new List<string>(), Ro = new List<string>(), Env = new List<string>(), DenyWrite = new List<string>();
+    public List<string> Rw = new List<string>(), Ro = new List<string>(), Env = new List<string>(), DenyWrite = new List<string>(), Exclude = new List<string>();
     public string CommandLine;
 }
 
@@ -88,6 +89,7 @@ static class Program
                 case "--revoke": o.Revoke = true; break;
                 case "--print-sid": o.PrintSid = true; break;
                 case "--deny-write": o.DenyWrite.Add(a[++i]); break;
+                case "--exclude": o.Exclude.Add(a[++i]); break;
                 // The command line as one base64 (UTF-8) token: no quoting problems between node-pty and us.
                 case "--cmd64": o.CommandLine = Encoding.UTF8.GetString(Convert.FromBase64String(a[++i])); break;
                 case "--":
@@ -115,12 +117,37 @@ static class Program
         return sid;
     }
 
+    // One helper at a time changes permissions and creates its process. Two starts a few seconds apart used to overlap:
+    // while one rewrote the permissions of a folder, the other found the file it wanted to start without access
+    // ("file not found"). Local\ = per Windows session, so every Hearth instance of the user shares it.
+    static readonly Mutex Gate = new Mutex(false, @"Local\HearthSandboxGrants");
+    static bool gateHeld;
+    static void Enter()
+    {
+        try { gateHeld = Gate.WaitOne(TimeSpan.FromSeconds(300)); }
+        catch (AbandonedMutexException) { gateHeld = true; }     // the previous owner was killed: the lock is ours now
+    }
+    static void Leave() { if (gateHeld) { gateHeld = false; try { Gate.ReleaseMutex(); } catch (ApplicationException) { } } }
+    static int FailLeave(string msg) { Leave(); return Fail(msg); }
+
+    /// Does the container already have (at least) these rights on the folder, inherited by everything below?
+    /// Then nothing is rewritten: faster starts, and no moment in which files lose their entries.
+    static bool HasRule(FileSystemSecurity sec, SecurityIdentifier sid, FileSystemRights rights, bool folder)
+    {
+        foreach (FileSystemAccessRule r in sec.GetAccessRules(true, false, typeof(SecurityIdentifier)))
+            if (r.AccessControlType == AccessControlType.Allow && r.IdentityReference.Equals(sid) && (r.FileSystemRights & rights) == rights
+                && (!folder || r.InheritanceFlags == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit)))
+                return true;
+        return false;
+    }
+
     static void Grant(string path, SecurityIdentifier sid, FileSystemRights rights)
     {
         if (Directory.Exists(path))
         {
             var di = new DirectoryInfo(path);
             var sec = di.GetAccessControl();
+            if (HasRule(sec, sid, rights, true)) return;
             sec.AddAccessRule(new FileSystemAccessRule(sid, rights, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
             di.SetAccessControl(sec);
         }
@@ -128,6 +155,7 @@ static class Program
         {
             var fi = new FileInfo(path);
             var sec = fi.GetAccessControl();
+            if (HasRule(sec, sid, rights, false)) return;
             sec.AddAccessRule(new FileSystemAccessRule(sid, rights, AccessControlType.Allow));
             fi.SetAccessControl(sec);
         }
@@ -142,6 +170,23 @@ static class Program
             else if (File.Exists(path)) { var fi = new FileInfo(path); var s = fi.GetAccessControl(); s.PurgeAccessRules(sid); fi.SetAccessControl(s); }
         }
         catch (Exception e) { Console.Error.WriteLine("hearth-sandbox: could not revoke " + path + ": " + e.Message); }
+    }
+
+    /// Keep the container out of a folder inside a granted tree (e.g. the folder of Hearth itself, which would otherwise
+    /// carry entries that stop Electron from starting): inheritance is cut and the container's entries are removed.
+    static void Exclude(string path, SecurityIdentifier sid)
+    {
+        if (!Directory.Exists(path)) return;
+        var di = new DirectoryInfo(path);
+        var sec = di.GetAccessControl();
+        bool has = false;
+        foreach (FileSystemAccessRule r in sec.GetAccessRules(true, false, typeof(SecurityIdentifier))) if (r.IdentityReference.Equals(sid)) has = true;
+        if (sec.AreAccessRulesProtected && !has) return;           // already excluded
+        sec.SetAccessRuleProtection(true, true);                    // keep what was inherited as explicit entries
+        di.SetAccessControl(sec);
+        sec = di.GetAccessControl();
+        sec.PurgeAccessRules(sid);
+        di.SetAccessControl(sec);
     }
 
     /// Undo a read-only island: forget the container and let the folder inherit from its parent again.
@@ -215,14 +260,21 @@ static class Program
         if (o.PrintSid) { Console.WriteLine(sidText); return 0; }
         if (o.Revoke)
         {
-            foreach (var p in o.Rw) Revoke(p, sid);
-            foreach (var p in o.DenyWrite) RevokeIsland(p, sid);
-            foreach (var p in o.Ro) Revoke(p, sid);
-            Native.DeleteAppContainerProfile(container);
+            Enter();
+            try
+            {
+                foreach (var p in o.Rw) Revoke(p, sid);
+                foreach (var p in o.DenyWrite) RevokeIsland(p, sid);
+                foreach (var p in o.Exclude) RevokeIsland(p, sid);
+                foreach (var p in o.Ro) Revoke(p, sid);
+                Native.DeleteAppContainerProfile(container);
+            }
+            finally { Leave(); }
             return 0;
         }
         if (string.IsNullOrEmpty(o.CommandLine)) return Fail("no command");
 
+        Enter();      // released right after the process exists (Leave below) or on any failure (FailLeave)
         try
         {
             foreach (var p in o.Ro) Grant(p, sid, FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize);
@@ -243,8 +295,9 @@ static class Program
                     InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
                 di.SetAccessControl(sec);
             }
+            foreach (var p in o.Exclude) Exclude(p, sid);     // after the grants above, which reach into these folders
         }
-        catch (Exception e) { return Fail("cannot grant access: " + e.Message); }
+        catch (Exception e) { return FailLeave("cannot grant access: " + e.Message); }
 
         // Capabilities: internet = outbound internet; loopback = private network client/server (local proxy only).
         var caps = new List<string>();
@@ -254,7 +307,7 @@ static class Program
         IntPtr capArray = Marshal.AllocHGlobal(Math.Max(1, caps.Count) * capSize);
         for (int i = 0; i < caps.Count; i++)
         {
-            IntPtr cs; if (!Native.ConvertStringSidToSid(caps[i], out cs)) return Fail("bad capability sid");
+            IntPtr cs; if (!Native.ConvertStringSidToSid(caps[i], out cs)) return FailLeave("bad capability sid");
             Marshal.StructureToPtr(new Native.SID_AND_ATTRIBUTES { Sid = cs, Attributes = 4 }, capArray + i * capSize, false);
         }
         var sc = new Native.SECURITY_CAPABILITIES { AppContainerSid = sidPtr, Capabilities = caps.Count > 0 ? capArray : IntPtr.Zero, CapabilityCount = (uint)caps.Count };
@@ -264,9 +317,9 @@ static class Program
         IntPtr size = IntPtr.Zero;
         Native.InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
         IntPtr attrs = Marshal.AllocHGlobal(size);
-        if (!Native.InitializeProcThreadAttributeList(attrs, 1, 0, ref size)) return Fail("attribute list: " + Marshal.GetLastWin32Error());
+        if (!Native.InitializeProcThreadAttributeList(attrs, 1, 0, ref size)) return FailLeave("attribute list: " + Marshal.GetLastWin32Error());
         if (!Native.UpdateProcThreadAttribute(attrs, 0, Native.PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, scPtr, (IntPtr)Marshal.SizeOf(sc), IntPtr.Zero, IntPtr.Zero))
-            return Fail("security capabilities: " + Marshal.GetLastWin32Error());
+            return FailLeave("security capabilities: " + Marshal.GetLastWin32Error());
 
         var si = new Native.STARTUPINFOEX();
         si.StartupInfo.cb = Marshal.SizeOf(typeof(Native.STARTUPINFOEX));
@@ -307,11 +360,12 @@ static class Program
             string cl = o.CommandLine.TrimStart();
             string first = cl.StartsWith("\"") ? cl.Substring(1, Math.Max(0, cl.IndexOf('"', 1) - 1)) : cl.Split(' ')[0];
             string where = Path.IsPathRooted(first) ? (File.Exists(first) ? "the file exists but cannot be started" : "no such file") : "not found on PATH";
-            return Fail("cannot start: " + why + " [" + where + ": " + first + "; folder: " + (o.Cwd ?? "(none)") + "]");
+            return FailLeave("cannot start: " + why + " [" + where + ": " + first + "; folder: " + (o.Cwd ?? "(none)") + "]");
         }
         Native.AssignProcessToJobObject(job, pi.hProcess);
         Native.SetConsoleCtrlHandler(c => true, true); // Ctrl+C goes to the child, not to us
         Native.ResumeThread(pi.hThread);
+        Leave();
         Native.WaitForSingleObject(pi.hProcess, 0xFFFFFFFF);
         uint code; Native.GetExitCodeProcess(pi.hProcess, out code);
         Native.CloseHandle(job);

@@ -90,6 +90,7 @@ function buildArgs(r) {
   for (const p of [...new Set(rw)]) a.push('--rw', p);
   for (const p of [...new Set(ro)]) a.push('--ro', p);
   a.push('--deny-write', path.join(r.directory, '.git', 'hooks'));
+  for (const p of r.exclude || []) a.push('--exclude', p);
   const env = { ...privateEnvironment(r.home), ...(AGENTS[r.kind]?.env || {}), ...(r.env || {}) };
   for (const [k, v] of Object.entries(env)) a.push('--env', `${k}=${v}`);
   a.push('--cmd64', Buffer.from(r.rawCommandLine || commandLine(r.executable, r.args), 'utf8').toString('base64'));
@@ -98,10 +99,19 @@ function buildArgs(r) {
 
 /** Arguments that remove every grant of a launch again (shared by the same project container). */
 function revokeArgs(helperArgs) {
-  const keep = new Set(['--name', '--rw', '--ro', '--deny-write']);
+  const keep = new Set(['--name', '--rw', '--ro', '--deny-write', '--exclude']);
   const out = [];
   for (let i = 0; i < helperArgs.length; i += 2) if (keep.has(helperArgs[i])) out.push(helperArgs[i], helperArgs[i + 1]);
   return [...out, '--revoke'];
+}
+
+/**
+ * Folders of the running app that lie inside the project folder: the container is kept out of them. Entries of the
+ * container there would stop Electron from starting after a crash ("Sandboxed processes cannot read ...").
+ */
+function appFolders(projectDir, execPath = process.execPath, resourcesPath = process.resourcesPath) {
+  const inside = (p) => { const rel = path.relative(path.resolve(projectDir), path.resolve(p)); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
+  return [...new Set([path.dirname(execPath), resourcesPath && path.dirname(resourcesPath)].filter(Boolean))].filter(inside);
 }
 
 const helperPath = () => {
@@ -110,4 +120,4 @@ const helperPath = () => {
   return [packed, dev].find((p) => { try { return fs.existsSync(p); } catch { return false; } }) || null;
 };
 
-module.exports = { containerName, quoteArg, resolveExecutable, commandLine, runtimeFolders, privateHome, privateEnvironment, buildArgs, revokeArgs, helperPath };
+module.exports = { containerName, quoteArg, resolveExecutable, commandLine, runtimeFolders, privateHome, privateEnvironment, buildArgs, revokeArgs, appFolders, helperPath };

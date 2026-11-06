@@ -117,6 +117,21 @@ test('leases: grants left behind by a killed run are undone at the next start, b
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('the running app\'s own folder is kept out of the grants when it lies inside the project', () => {
+  // the app folder inside the project (e.g. a build in <repo>\dist\win-unpacked): excluded
+  const inside = native.appFolders('C:\\Work\\repo', 'C:\\Work\\repo\\dist\\win-unpacked\\Hearth IDE.exe', 'C:\\Work\\repo\\dist\\win-unpacked\\resources');
+  assert.deepEqual(inside, [path.resolve('C:\\Work\\repo\\dist\\win-unpacked')]);
+  // dev run: electron.exe in node_modules\electron\dist
+  assert.deepEqual(native.appFolders('C:\\Work\\repo', 'C:\\Work\\repo\\node_modules\\electron\\dist\\electron.exe', 'C:\\Work\\repo\\node_modules\\electron\\dist\\resources'),
+    [path.resolve('C:\\Work\\repo\\node_modules\\electron\\dist')]);
+  // an app outside the project, or the project inside the app: nothing to exclude
+  assert.deepEqual(native.appFolders('C:\\Work\\repo', 'C:\\Apps\\Hearth\\Hearth IDE.exe', 'C:\\Apps\\Hearth\\resources'), []);
+  assert.deepEqual(native.appFolders('C:\\Apps\\Hearth\\data', 'C:\\Apps\\Hearth\\Hearth IDE.exe', 'C:\\Apps\\Hearth\\resources'), []);
+  const a = native.buildArgs({ ...base, exclude: ['C:\\p\\dist\\win-unpacked'] });
+  assert.equal(a[a.indexOf('--exclude') + 1], 'C:\\p\\dist\\win-unpacked');
+  assert.ok(native.revokeArgs(a).includes('--exclude'));          // undone again when the last process of the project ends
+});
+
 test('the real profile folder is never granted by default', () => {
   const a = native.buildArgs(base).join(' ');
   assert.ok(!a.includes('.ssh'));

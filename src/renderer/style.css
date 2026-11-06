@@ -205,3 +205,5 @@ dialog.search { overflow: hidden; }
 .tabs > button:hover:not(:disabled) { background: var(--panel2); color: var(--fg); }
 .tabs > button.active { color: var(--fg); } .tabs > button.active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .hint-bar { padding: 8px 14px; background: var(--accent-soft); color: var(--fg); border-bottom: 1px solid var(--accent-line); font-size: 12.5px; }
+#toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 12px); z-index: 200; max-width: min(560px, 90vw); padding: 9px 16px; border-radius: 999px; background: var(--panel3); color: var(--fg); border: 1px solid var(--accent-line); box-shadow: 0 10px 30px var(--shadow); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s var(--ease); font-size: 12.5px; }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
