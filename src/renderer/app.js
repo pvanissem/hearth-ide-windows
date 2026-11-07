@@ -191,10 +191,15 @@ function attachTerminal(s) {
   state.terms.set(s.id, { term, fit, host });
 }
 /** Give the keyboard to the selected session's terminal (when nothing else, like a dialog or an input, has it). */
+// After a native alert / confirm Electron leaves the window without keyboard focus (typing then does nothing).
+for (const name of ['alert', 'confirm']) {
+  const native = window[name].bind(window);
+  window[name] = (...a) => { const prev = document.activeElement; const r = native(...a); window.hearth.refocus().then(() => { if (prev && prev.isConnected && prev !== document.body) prev.focus(); else focusTerminal(); }); return r; };
+}
 function focusTerminal() {
   const t0 = state.terms.get(state.selected);
   const a = document.activeElement;
-  const free = !a || a === document.body || a.classList?.contains('xterm-helper-textarea');
+  const free = !a || a === document.body || a.id === 'tree' || a.classList?.contains('xterm-helper-textarea');
   if (t0 && free && !document.querySelector('dialog[open]') && Layout.isActive('agent')) t0.term.focus();
 }
 // Coming back from the browser (sign-in!) the window has the focus but no element does: Ctrl+V would go nowhere.

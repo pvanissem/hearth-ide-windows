@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('hearth', {
   checkUpdate: invoke('app:checkUpdate'),
   smokeShot: invoke('smoke:shot'),
   clipboard: { read: invoke('clip:read'), write: invoke('clip:write') },
+  refocus: () => ipcRenderer.invoke('win:refocus'),
   setTitleBar:(bg, fg) => ipcRenderer.invoke('win:theme', { bg, fg }),
   pickFolder: invoke('dialog:folder'),
   start: invoke('session:start'),

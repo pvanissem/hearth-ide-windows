@@ -91,6 +91,8 @@ ipcMain.handle('win:theme', (_e, { bg, fg }) => {
 });
 // Links from the terminal (a click on the sign-in link of an agent, a dev server's address): https, or http to this PC only.
 const OPENABLE = /^(https:\/\/[^\s]+|http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/[^\s]*)?)$/;
+// Electron loses the keyboard focus after a native alert() / confirm(): hand it back
+ipcMain.handle('win:refocus', () => { if (win && !win.isDestroyed()) { win.blur(); win.focus(); win.webContents.focus(); } });
 ipcMain.handle('app:open', (_e, url) => { if (OPENABLE.test(String(url)) && String(url).length < 4096) return shell.openExternal(String(url)); throw new Error('Only https links (and http links to this PC) can be opened'); });
 // Clipboard for the terminal (copy a selection, paste); the text only moves between the clipboard and the terminal.
 ipcMain.handle('clip:read', async () => String((await clipboard.readText()) || '').slice(0, 1024 * 1024));
