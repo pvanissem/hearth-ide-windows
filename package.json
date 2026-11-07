@@ -1,6 +1,6 @@
 {
   "name": "hearth-ide-windows",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "Patrick van Issem <p.vanissem91@gmail.com>",
   "description": "Hearth IDE for Windows - sandboxed AI coding agents, inbox, editor and Git in one window",
   "main": "src/main/main.js",
