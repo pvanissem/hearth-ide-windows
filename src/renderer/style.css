@@ -216,3 +216,8 @@ dialog.search { overflow: hidden; }
 .node.drop { background: var(--accent-soft); outline: 1px dashed var(--accent); outline-offset: -1px; }
 .tree-input { flex: 1; min-width: 0; padding: 1px 6px; border: 1px solid var(--accent); border-radius: 4px; background: var(--panel); color: var(--fg); font: inherit; outline: none; }
 .menu .mi .key { margin-left: auto; color: var(--dim); font-size: .85em; padding-left: 24px; }
+
+/* start dialog: recent sessions */
+.recent { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px; }
+.recent-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; } .recent-row:hover { background: var(--accent-soft); }
+.recent-row .rn { font-weight: 600; } .recent-row small { margin-left: auto; } .recent-row .ib { flex: none; }

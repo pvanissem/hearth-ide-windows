@@ -5,13 +5,13 @@
 const AGENTS = {
   claude: {
     name: 'Claude Code', executable: 'claude', install: 'npm install -g @anthropic-ai/claude-code',
-    resume: (id) => (id ? ['--resume', id] : []), login: ['auth', 'login'],
+    resume: (id) => (id ? ['--resume', id] : []), login: ['auth', 'login'], continueLast: ['--continue'],
     domains: ['statsig.anthropic.com', 'console.anthropic.com', 'api.anthropic.com'],
     env: { DISABLE_AUTOUPDATER: '1' }, configDir: '.claude',
   },
   codex: {
     name: 'Codex', executable: 'codex', install: 'npm install -g @openai/codex',
-    resume: (id) => (id ? ['resume', id] : []), login: ['login'],
+    resume: (id) => (id ? ['resume', id] : []), login: ['login'], continueLast: ['resume', '--last'],
     domains: ['chatgpt.com', 'auth.openai.com', 'ab.chatgpt.com', 'api.openai.com'],
     ports: [1455], configDir: '.codex',
   },

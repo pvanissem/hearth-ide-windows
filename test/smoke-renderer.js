@@ -25,6 +25,9 @@
   const strip = (t) => t.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
   const run = async (cmd, ms = 2500) => { out.length = 0; h.input(s.id, cmd + '\r'); await wait(ms); return strip(out.join('')); };
   const denied = (t) => /denied|verweigert|Zugriff|Access/i.test(t);
+  r.historySaved = (await h.history.list()).some((x) => x.kind === 'shell' && x.directory.toLowerCase() === SMOKE_DIR.toLowerCase());
+  click('#btn-start'); await wait(500);
+  r.recentShown = !$('#start-recent').hidden && $('#start-recent').textContent.length > 0; $('#dlg-start').close(); await wait(100);
   r.echo = (await run('echo hearth-smoke-ok')).includes('hearth-smoke-ok');
   // ---- terminal: right-click copies a selection / pastes, links are recognised, odd links are refused ----
   const tm = state.terms.get(s.id);

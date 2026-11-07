@@ -1,6 +1,9 @@
 'use strict';
 // German texts. The key is the English source text (see scripts/i18n-strings.js --missing).
 I18n.register('de', {
+  'Recent sessions': 'Zuletzt benutzt',
+  'Remove from list': 'Aus der Liste entfernen',
+  'Continue the last conversation in this folder': 'Letzte Unterhaltung in diesem Ordner fortsetzen',
   '{n} item(s) cut': '{n} Element(e) ausgeschnitten',
   '{n} item(s) copied': '{n} Element(e) kopiert',
   'Move "{name}" to the Recycle Bin?': '„{name}“ in den Papierkorb verschieben?',

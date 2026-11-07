@@ -10,6 +10,7 @@ const sandbox = require('./sandbox');
 const settings = require('./settings');
 const git = require('./git');
 const fileops = require('./fileops');
+const { History } = require('./history');
 const { StatusTracker } = require('./status');
 const journalLib = require('./journal');
 const buildLib = require('./build');
@@ -126,7 +127,10 @@ async function cloneInto(url, parent) {
   return target;
 }
 
-ipcMain.handle('session:start', async (_e, { kind, directory, login = false, resumeID, cloneUrl }) => {
+const history = new History(path.join(process.env.HEARTH_HOME || require('node:os').homedir(), '.hearth', 'sessions.json'));
+ipcMain.handle('history:list', () => history.list().filter((x) => AGENTS[x.kind] && fs.existsSync(x.directory)));
+ipcMain.handle('history:forget', (_e, { kind, directory }) => history.forget(kind, String(directory)));
+ipcMain.handle('session:start', async (_e, { kind, directory, login = false, resumeID, cloneUrl, continueLast = false }) => {
   if (!AGENTS[kind]) throw new Error('Unknown agent');
   let dir = requireWorkspace(directory);
   if (cloneUrl) dir = await cloneInto(cloneUrl, dir);
@@ -140,12 +144,13 @@ ipcMain.handle('session:start', async (_e, { kind, directory, login = false, res
     launch = await sandbox.prepare({
       purpose: 'agent', kind, runID: id, directory: dir, settings: cfg, resumeID,
       mode: cfg.allowUnsandboxed && !(await sandbox.detect(false, cfg.backend)).backend ? 'none' : 'sandbox',
-      extraArgs: [...(login && AGENTS[kind].login ? AGENTS[kind].login : []), ...(useJournal ? journalLib.agentArguments(kind) : [])],
+      extraArgs: [...(login && AGENTS[kind].login ? AGENTS[kind].login : []), ...(continueLast && !login && AGENTS[kind].continueLast ? AGENTS[kind].continueLast : []), ...(useJournal ? journalLib.agentArguments(kind) : [])],
       journal: helperJournal, secretEnv: creds.envValues(),
     });
     leases.attach(lease, launch);
     term = pty.spawn(launch.file, launch.args, { name: 'xterm-256color', cols: 120, rows: 32, cwd: launch.cwd, env: launch.env, useConpty: true });
   } catch (e) { leases.release(lease); throw e; }
+  if (!login) history.record(kind, dir);
   const status = new StatusTracker((state) => send('session:status', { id, status: state }));
   const reader = new journalLib.JournalReader(path.join(sandbox.runDirectory(id), journalLib.FILE_NAME));
   const s = { id, kind, login, directory: dir, sandboxed: launch.sandboxed, backend: launch.backend, lease, term, status, reader, started: Date.now(), title: path.basename(dir) };

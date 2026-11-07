@@ -240,13 +240,31 @@ async function openStart() {
   const sel = $('#start-kind');
   if (!sel.options.length) for (const a of await window.hearth.agents()) sel.append(el('option', { value: a.id }, a.name));
   $('#start-login').parentElement.hidden = false;
+  $('#start-continue').checked = false;
+  await drawRecent();
   updateHint();
   $('#dlg-start').showModal();
 }
+/** Sessions of earlier runs: pick one to come back to that folder (and its last conversation). */
+async function drawRecent() {
+  const box = $('#start-recent'); const items = (await window.hearth.history.list()).slice(0, 6);
+  const names = Object.fromEntries((await window.hearth.agents()).map((a) => [a.id, a.name]));
+  box.hidden = !items.length;
+  box.replaceChildren(...(items.length ? [el('div', { class: 'hint' }, t('Recent sessions'))] : []), ...items.map((x) => {
+    const row = el('div', { class: 'recent-row', title: x.directory }, el('span', { class: 'rn' }, x.title), el('small', { class: 'hint' }, `${names[x.kind] || x.kind} - ${new Date(x.last).toLocaleDateString(I18n.lang === 'de' ? 'de-DE' : 'en-GB')}`));
+    row.addEventListener('click', () => { $('#start-kind').value = x.kind; $('#start-source').value = 'folder'; $('#start-dir').value = x.directory; updateHint(); $('#start-continue').checked = Boolean(AGENT_CONTINUE[x.kind]); });
+    const del = el('button', { type: 'button', class: 'ib x', title: t('Remove from list') }); del.innerHTML = Icons.html('x', 12);
+    del.addEventListener('click', async (e) => { e.stopPropagation(); await window.hearth.history.forget(x.kind, x.directory); drawRecent(); });
+    row.append(del); return row;
+  }));
+}
+const AGENT_CONTINUE = { claude: true, codex: true };
+
 async function updateHint() {
   const agents = await window.hearth.agents();
   const a = agents.find((x) => x.id === $('#start-kind').value);
   $('#start-login').parentElement.hidden = !(a && a.login);
+  $('#row-continue').hidden = !AGENT_CONTINUE[$('#start-kind').value];
   let hint = a && a.install ? t('Install: {cmd} (the sandbox reads it from your PATH)', { cmd: a.install }) : '';
   if (state.env && !state.env.backend) hint += (hint ? '\n' : '') + state.env.reason;
   $('#start-hint').textContent = hint;
@@ -263,7 +281,7 @@ $('#btn-go').addEventListener('click', async (e) => {
   const clone = $('#start-source').value === 'clone';
   if (!directory || (clone && !$('#start-url').value.trim())) { e.preventDefault(); return; }
   try {
-    const s = await window.hearth.start({ kind, directory, login: $('#start-login').checked, cloneUrl: clone ? $('#start-url').value.trim() : undefined });
+    const s = await window.hearth.start({ kind, directory, login: $('#start-login').checked, continueLast: $('#start-continue').checked && !$('#start-login').checked && !!AGENT_CONTINUE[kind], cloneUrl: clone ? $('#start-url').value.trim() : undefined });
     state.sessions.set(s.id, s);
     attachTerminal(s);
     select(s.id);

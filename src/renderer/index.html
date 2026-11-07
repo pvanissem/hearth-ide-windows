@@ -131,6 +131,8 @@
       <select id="start-source"><option value="folder" data-i18n>Existing folder</option><option value="clone" data-i18n>Clone repository</option></select></label>
     <label id="row-clone" hidden><span data-i18n>Repository URL</span> <input id="start-url" placeholder="git@github.com:owner/repo.git"></label>
     <label><span id="lbl-dir" data-i18n>Folder</span> <span class="row"><input id="start-dir" readonly data-i18n-ph="Choose a project folder" placeholder="Choose a project folder"><button type="button" id="btn-pick" data-i18n>Browse...</button></span></label>
+    <div id="start-recent" class="recent" hidden></div>
+    <label class="check" id="row-continue" hidden><input type="checkbox" id="start-continue"> <span data-i18n>Continue the last conversation in this folder</span></label>
     <label class="check"><input type="checkbox" id="start-login"> <span data-i18n>Run the agent's login first</span></label>
     <p id="start-hint" class="hint"></p>
     <div class="row end"><button value="cancel" data-i18n>Cancel</button><button id="btn-go" class="primary" value="go" data-i18n>Start</button></div>
