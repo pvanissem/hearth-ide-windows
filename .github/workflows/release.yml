@@ -1,0 +1,26 @@
+# Builds the Windows installer when a version tag (v*) is pushed and attaches it to a GitHub release.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "Hearth IDE for Windows ${GITHUB_REF_NAME#v}" --generate-notes \
+            "dist/Hearth IDE Setup ${GITHUB_REF_NAME#v}.exe" "dist/Hearth IDE Setup ${GITHUB_REF_NAME#v}.exe.blockmap" dist/latest.yml
