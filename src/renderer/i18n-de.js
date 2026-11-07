@@ -1,6 +1,20 @@
 'use strict';
 // German texts. The key is the English source text (see scripts/i18n-strings.js --missing).
 I18n.register('de', {
+  '{n} item(s) cut': '{n} Element(e) ausgeschnitten',
+  '{n} item(s) copied': '{n} Element(e) kopiert',
+  'Move "{name}" to the Recycle Bin?': '„{name}“ in den Papierkorb verschieben?',
+  'Move {n} items to the Recycle Bin?': '{n} Elemente in den Papierkorb verschieben?',
+  'New file': 'Neue Datei',
+  'New folder': 'Neuer Ordner',
+  'Cut': 'Ausschneiden',
+  'Copy': 'Kopieren',
+  'Paste': 'Einfügen',
+  'Duplicate': 'Duplizieren',
+  'Rename': 'Umbenennen',
+  'Delete': 'Löschen',
+  'Copy path': 'Pfad kopieren',
+  'Show in Explorer': 'Im Explorer zeigen',
   // terminal
   'Paste {n} lines into the terminal?': '{n} Zeilen ins Terminal einfügen?',
   'Sign-in: click the link in the terminal (it opens in your browser), then paste the code here (use "Copy code" on that page) with Ctrl+V or a right-click. It is not shown while you paste; press Enter to send it.': 'Anmeldung: Klicke auf den Link im Terminal (er öffnet sich im Browser) und füge den Code danach hier ein (auf der Seite „Copy code“ benutzen), mit Strg+V oder Rechtsklick. Er wird beim Einfügen nicht angezeigt; sende ihn mit Enter.',

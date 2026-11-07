@@ -107,6 +107,8 @@
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); open('files'); return; }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); open('text'); return; }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') { e.preventDefault(); open('actions'); return; }
+    // VS Code: Ctrl+P (go to file), Ctrl+Shift+P (commands); not inside a terminal, where Ctrl+P is the shell's
+    if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'p' && !e.target.closest?.('.xterm')) { e.preventDefault(); open(e.shiftKey ? 'actions' : 'files'); return; }
     if (e.key !== 'Shift') lastShift = 0;
   });
   document.addEventListener('keyup', (e) => {

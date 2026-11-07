@@ -9,6 +9,7 @@ const { AGENTS } = require('./agents');
 const sandbox = require('./sandbox');
 const settings = require('./settings');
 const git = require('./git');
+const fileops = require('./fileops');
 const { StatusTracker } = require('./status');
 const journalLib = require('./journal');
 const buildLib = require('./build');
@@ -201,6 +202,13 @@ ipcMain.handle('fs:write', async (_e, { file, content }) => {
   if (parts.some((p, i) => p === '.git' && parts[i + 1] === 'hooks')) throw new Error('.git/hooks is write-protected');
   await fs.promises.writeFile(abs, String(content), 'utf8');
 });
+
+ipcMain.handle('fs:copy', (_e, { src, dir }) => fileops.copyInto(requireWorkspace(src), requireWorkspace(dir)));
+ipcMain.handle('fs:move', (_e, { src, dir }) => fileops.moveInto(requireWorkspace(src), requireWorkspace(dir)));
+ipcMain.handle('fs:rename', (_e, { src, name }) => fileops.rename(requireWorkspace(src), name));
+ipcMain.handle('fs:create', (_e, { dir, name, folder }) => fileops.create(requireWorkspace(dir), name, Boolean(folder)));
+ipcMain.handle('fs:trash', (_e, src) => { const abs = requireWorkspace(src); if (![...workspaces].some((w) => path.resolve(w) === abs)) return shell.trashItem(abs); throw new Error('A workspace root cannot be deleted'); });
+ipcMain.handle('fs:reveal', (_e, src) => shell.showItemInFolder(requireWorkspace(src)));
 
 // ---- git (workspace only) ----
 const gitOp = (fn) => async (_e, dir, ...rest) => fn(requireWorkspace(dir), ...rest);

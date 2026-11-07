@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld('hearth', {
   input: (id, data) => ipcRenderer.send('session:input', { id, data }),
   resize: (id, cols, rows) => ipcRenderer.send('session:resize', { id, cols, rows }),
   onData: on('session:data'), onStatus: on('session:status'), onExit: on('session:exit'), onRunEnd: on('run:end'),
+  files: {
+    copy: (src, dir) => ipcRenderer.invoke('fs:copy', { src, dir }), move: (src, dir) => ipcRenderer.invoke('fs:move', { src, dir }),
+    rename: (src, name) => ipcRenderer.invoke('fs:rename', { src, name }), create: (dir, name, folder) => ipcRenderer.invoke('fs:create', { dir, name, folder }),
+    trash: invoke('fs:trash'), reveal: invoke('fs:reveal'),
+  },
   list: invoke('fs:list'), read: invoke('fs:read'), write: (file, content) => ipcRenderer.invoke('fs:write', { file, content }),
   git: group('git', ['isRepo', 'status', 'numstat', 'diff', 'stage', 'unstage', 'commit', 'log', 'branches', 'checkout', 'createBranch', 'fetch', 'pull', 'push',
     'stageAll', 'unstageAll', 'merge', 'mergeAbort', 'mergeInProgress', 'remoteUrl', 'stashList', 'stashSave', 'stashApply', 'stashPop', 'stashDrop']),

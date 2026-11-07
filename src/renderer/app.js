@@ -277,45 +277,7 @@ async function showSandboxState() {
   b.innerHTML = Icons.html('shield', 13) + `<span>${ok ? (state.env.backend === 'native' ? 'AppContainer' : 'WSL2 · nono') : t('No sandbox')}</span>`;
 }
 
-// ---------- file tree ----------
-async function loadTree(root) {
-  const host = $('#tree');
-  host.replaceChildren();
-  host.append(await dirNode(root, true));
-}
-async function dirNode(dir, open) {
-  const wrap = el('div');
-  const children = el('div', { class: 'children' });
-  let loaded = false; let isOpen = false;
-  const toggle = async () => {
-    isOpen = !isOpen;
-    caret.innerHTML = Icons.html(isOpen ? 'chevron-down' : 'chevron-right', 13);
-    folder.innerHTML = Icons.html(isOpen ? 'folder-open' : 'folder', 15);
-    children.hidden = !isOpen;
-    if (isOpen && !loaded) {
-      loaded = true;
-      try {
-        for (const e of await window.hearth.list(dir)) {
-          if (e.dir) children.append(await dirNode(e.path, false));
-          else {
-            const n = el('div', { class: 'node' }, el('span', { class: 'caret' }), el('span', {}), e.name);
-            n.children[1].innerHTML = Icons.html(Icons.forFile(e.name), 15);
-            n.addEventListener('click', () => openFile(e.path)); children.append(n);
-          }
-        }
-      } catch (err) { children.append(el('div', { class: 'hint' }, errMsg(err))); }
-    }
-  };
-  const caret = el('span', { class: 'caret' });
-  const folder = el('span', {});
-  caret.innerHTML = Icons.html('chevron-right', 13); folder.innerHTML = Icons.html('folder', 15);
-  const label = el('div', { class: 'node dir' }, caret, folder, base(dir) || dir);
-  label.addEventListener('click', toggle);
-  wrap.append(label, children);
-  children.hidden = true;
-  if (open) await toggle();
-  return wrap;
-}
+// ---------- file tree: see tree.js ----------
 
 // ---------- editor (Monaco, one tab per file) ----------
 function langOf(file) {
@@ -329,7 +291,19 @@ function ensureEditor() {
     require.config({ paths: { vs: '../../node_modules/monaco-editor/min/vs' } });
     window.MonacoEnvironment = { getWorkerUrl: () => 'data:text/javascript;charset=utf-8,' + encodeURIComponent('self.MonacoEnvironment={baseUrl:"' + new URL('../../node_modules/monaco-editor/min/', location.href).href + '"};importScripts("' + new URL('../../node_modules/monaco-editor/min/vs/base/worker/workerMain.js', location.href).href + '");') };
     require(['vs/editor/editor.main'], () => {
-      state.editor = monaco.editor.create($('#monaco'), { value: '', language: 'plaintext', theme: Themes.monacoTheme(monaco), automaticLayout: true, minimap: { enabled: false }, fontSize: BASE_FONT + state.zoom + (state.paneZoom.editor || 0) });
+      EditorLang.api = EditorLang.setup(monaco, () => cur()?.directory);
+      // VS Code feel: minimap, bracket colours and guides, sticky scroll, smooth caret, suggestions while typing
+      state.editor = monaco.editor.create($('#monaco'), {
+        value: '', language: 'plaintext', theme: Themes.monacoTheme(monaco), automaticLayout: true, fontSize: BASE_FONT + state.zoom + (state.paneZoom.editor || 0),
+        fontFamily: "'Cascadia Code', 'Azeret Mono', Consolas, monospace", lineHeight: 0, minimap: { enabled: true, renderCharacters: false, scale: 1 },
+        bracketPairColorization: { enabled: true }, guides: { bracketPairs: 'active', indentation: true }, stickyScroll: { enabled: true }, smoothScrolling: true,
+        cursorBlinking: 'smooth', cursorSmoothCaretAnimation: 'on', renderWhitespace: 'selection', renderLineHighlight: 'all', folding: true, showFoldingControls: 'mouseover',
+        linkedEditing: true, formatOnPaste: true, formatOnType: true, autoClosingBrackets: 'languageDefined', autoClosingQuotes: 'languageDefined', autoSurround: 'languageDefined',
+        quickSuggestions: { other: true, comments: false, strings: true }, suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on', tabCompletion: 'on', snippetSuggestions: 'top',
+        suggest: { preview: true, showStatusBar: true, showIcons: true, showWords: true, insertMode: 'replace' }, parameterHints: { enabled: true, cycle: true },
+        wordBasedSuggestions: 'currentDocument', inlayHints: { enabled: 'on' }, occurrencesHighlight: 'singleFile', matchBrackets: 'always', scrollBeyondLastLine: false,
+        padding: { top: 6 }, mouseWheelZoom: false, multiCursorModifier: 'alt', dragAndDrop: true, emptySelectionClipboard: true, copyWithSyntaxHighlighting: true, tabSize: 4, detectIndentation: true,
+      });
       state.editor.onDidChangeModelContent(() => { const d = state.docs.get(state.active); if (d && !d.loading) { d.dirty = true; renderDocs(); } });
       state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveFile);
       state.editor.addAction({ id: 'hearth.usages', label: t('Find usages'), keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.F7], contextMenuGroupId: 'navigation', contextMenuOrder: 1.5,

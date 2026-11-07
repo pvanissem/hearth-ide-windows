@@ -164,6 +164,73 @@
   I18n.set('en'); await wait(100);
   r.englishBack = $('#btn-start2').textContent;
 
+  // ---- file browser: copy / cut / paste, keyboard, drag & drop, rename, delete, context menu ----
+  Layout.show('files'); await loadTree(SMOKE_DIR); await wait(500);
+  const P = (n) => SMOKE_DIR + BS + n;
+  const names = async (d) => (await h.list(d)).map((e) => e.name);
+  await h.files.create(SMOKE_DIR, 'ft-one', true); await h.files.create(SMOKE_DIR, 'ft-two', true); await h.write(P('ft-a.txt'), 'hello');
+  await reloadDirs([SMOKE_DIR]);
+  FT.sel = new Set([P('ft-a.txt')]); copySelection(false); await pasteInto(P('ft-one'));
+  r.ftCopy = (await names(P('ft-one'))).includes('ft-a.txt') && (await names(SMOKE_DIR)).includes('ft-a.txt');
+  FT.sel = new Set([P('ft-a.txt')]); copySelection(false); await pasteInto(SMOKE_DIR);                      // same folder: "ft-a copy.txt"
+  r.ftCopyUnique = (await names(SMOKE_DIR)).includes('ft-a copy.txt');
+  FT.sel = new Set([P('ft-a copy.txt')]); copySelection(true); await pasteInto(P('ft-two'));
+  r.ftCut = (await names(P('ft-two'))).includes('ft-a copy.txt') && !(await names(SMOKE_DIR)).includes('ft-a copy.txt');
+  FT.sel = new Set([P('ft-a.txt')]); $('#tree').dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+  FT.sel = new Set([P('ft-two')]); $('#tree').dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true })); await wait(600);
+  r.ftKeyboard = (await names(P('ft-two'))).includes('ft-a.txt');
+  await h.write(P('ft-drag.txt'), 'd'); await reloadDirs([SMOKE_DIR]);
+  const dt = new DataTransfer(); dt.setData('application/x-hearth-paths', JSON.stringify([P('ft-drag.txt')]));                  // drag onto a folder = move
+  FT.nodes.get(P('ft-one')).dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); await wait(800);
+  r.ftDragMove = (await names(P('ft-one'))).includes('ft-drag.txt') && !(await names(SMOKE_DIR)).includes('ft-drag.txt');
+  const m0 = document.querySelectorAll('.menu').length;
+  FT.nodes.get(P('ft-one')).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 60, clientY: 60 })); await wait(200);
+  const menuItems = [...document.querySelectorAll('.menu .mi')].map((b) => b.textContent);
+  r.ftMenu = document.querySelectorAll('.menu').length === m0 + 1 && ['New file', 'Cut', 'Copy', 'Paste', 'Rename', 'Delete'].every((x) => menuItems.some((m) => m.startsWith(x)));
+  closeCtx();
+  await openFile(P('ft-two') + BS + 'ft-a.txt');                                                              // open tabs follow a rename
+  FT.sel = new Set([P('ft-two') + BS + 'ft-a.txt']); await reloadDirs([P('ft-two')], P('ft-two'));
+  const to = await h.files.rename(P('ft-two') + BS + 'ft-a.txt', 'renamed.txt'); remapDocs(P('ft-two') + BS + 'ft-a.txt', to);
+  r.ftRenameTab = state.docs.has(to) && state.active === to;
+  await h.write(P('ft-a.txt'), 'again');
+  r.ftRefusesOverwrite = await h.files.move(P('ft-a.txt'), P('ft-one')).then(() => false, () => true);
+  await h.files.trash(P('ft-a.txt'));
+  await h.files.create(SMOKE_DIR, 'ft-x.txt', false);
+  r.ftCreateTwiceFails = await h.files.create(SMOKE_DIR, 'ft-x.txt', false).then(() => false, () => true);
+  r.ftOutsideRefused = await h.files.copy(P('ft-x.txt'), 'C:' + BS + 'Windows').then(() => false, () => true);
+  for (const n of ['ft-one', 'ft-two', 'ft-x.txt']) await h.files.trash(P(n));
+  await reloadDirs([SMOKE_DIR]); dropDocs(to);
+  r.ftTrash = !(await names(SMOKE_DIR)).some((n) => n.startsWith('ft-'));
+
+  // ---- editor: JavaScript (Monaco's service), Go and Java (completion, hover, outline) ----
+  await ensureEditor();
+  const mk = (text, lang) => monaco.editor.createModel(text, lang);
+  const labels = async (lang, text) => {
+    const m = mk(text, lang); const lines = text.split('\n'); const pos = new monaco.Position(lines.length, lines[lines.length - 1].length + 1);
+    const res = await EditorLang.api.providers[lang].provideCompletionItems(m, pos); m.dispose();
+    return res.suggestions.map((x) => (typeof x.label === 'string' ? x.label : x.label.label));
+  };
+  r.goFmt = (await labels('go', 'package main\nimport \"fmt\"\nfunc main() {\n\tfmt.')).includes('Println');
+  r.goSnippets = (await labels('go', 'package main\nfunc main() {\n\tif')).includes('iferr');
+  r.goVarType = (await labels('go', 'package main\nfunc f() {\n\tvar sb strings.Builder\n\tsb.')).includes('WriteString');
+  r.goHandler = (await labels('go', 'func h(w http.ResponseWriter, r *http.Request) {\n\tw.')).includes('WriteHeader');
+  r.goOwnSymbols = (await labels('go', 'package main\nfunc computeTotal() int { return 1 }\nfunc main() {\n\tcomp')).includes('computeTotal');
+  r.javaStatic = (await labels('java', 'class A { void f() { System.out.')).includes('println');
+  r.javaVarType = (await labels('java', 'class A { void f() { List<String> items = new ArrayList<>(); items.')).includes('stream');
+  r.javaSnippets = (await labels('java', 'class A {\n\tpsv')).includes('main');
+  const gm = mk('package main\n\ntype Server struct{}\n\nfunc (s *Server) Start() {}\nfunc main() {}\n', 'go');
+  r.goOutline = EditorLang.api.docSymbols('go', gm).map((x) => x.name).join(',') === 'Server,Start,main'; gm.dispose();
+  const jm = mk('public class Foo {\n  private int n;\n  public int getN() {\n    return n;\n  }\n  static void run(String a) {\n  }\n}\n', 'java');
+  r.javaOutline = EditorLang.api.docSymbols('java', jm).map((x) => x.name).join(',') === 'Foo,getN,run'; jm.dispose();
+  const jsm = mk('const nums = [1, 2, 3];\nnums.', 'javascript');
+  const wk = await (await monaco.languages.typescript.getJavaScriptWorker())(jsm.uri);
+  const comp = await wk.getCompletionsAtPosition(jsm.uri.toString(), jsm.getValue().length);
+  r.jsCompletion = Boolean(comp && comp.entries.some((x) => x.name === 'map') && comp.entries.some((x) => x.name === 'filter'));
+  const nodeM = mk('process.', 'javascript'); const wk2 = await (await monaco.languages.typescript.getJavaScriptWorker())(nodeM.uri);
+  const comp2 = await wk2.getCompletionsAtPosition(nodeM.uri.toString(), 8); r.jsNodeTypes = Boolean(comp2 && comp2.entries.some((x) => x.name === 'env'));
+  jsm.dispose(); nodeM.dispose();
+  r.editorMinimap = state.editor.getOption(monaco.editor.EditorOption.minimap).enabled === true;
+
   // ---- Panes: drag and drop, split, chooser, maximise, text size, divider, close, persistence ----
   Layout.reset(); await wait(400);
   Layout.show('agent'); await wait(200);
