@@ -8,9 +8,23 @@
   const kindIcon = (k) => { const s = el('span', { class: 'k' }); s.innerHTML = Icons.html(KIND[k] || 'file', 15); return s; };
   const matches = (n, f) => f === 'all' || (f === 'step' && n.kind === 'step') || (f === 'decision' && n.kind === 'decision') || (f === 'question' && (n.kind === 'question' || n.open > 0));
 
+  let lastSig = null;
+  let renders = 0;
+
+  /** Redraw only when something changed (the pane polls every 2 s), in one step and with the scroll position kept. */
   function render() {
-    const host = $('#jr-tree');
-    host.replaceChildren();
+    const s = cur();
+    const sig = JSON.stringify([s?.id, data, $('#jr-filter').value, I18n.lang]);
+    if (sig === lastSig) return;
+    lastSig = sig; renders++;
+    const scroller = $('#insp-overview'); const top = scroller.scrollTop;
+    const next = document.createElement('div');
+    build(next);
+    $('#jr-tree').replaceChildren(...next.childNodes);
+    scroller.scrollTop = top;
+  }
+
+  function build(host) {
     const s = cur();
     if (!s) { host.append(el('div', { class: 'hint' }, t('No session selected'))); return; }
     if (!data || data.empty) {
@@ -74,5 +88,6 @@
   document.addEventListener('hearth:tab', (e) => { if (e.detail === 'overview') poll(); });
   clearInterval(timer);
   timer = setInterval(() => { if (active() && document.hasFocus()) poll(); }, 2000);
-  window.JournalView = { poll };
+  document.addEventListener('hearth:lang', () => { lastSig = null; render(); });
+  window.JournalView = { poll, get renders() { return renders; } };
 })();

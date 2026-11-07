@@ -74,6 +74,17 @@ function sessionCard(s) {
   return card;
 }
 
+/** Replace a list's cards only when their content changed: a status line that says the same must not make the list flash. */
+function swapIfChanged(listEl, nodes) {
+  const sig = nodes.map((n) => n.outerHTML).join('');
+  if (listEl.dataset.sig === sig) return false;
+  listEl.dataset.sig = sig;
+  const scroller = listEl.closest('#inbox-scroll'); const top = scroller ? scroller.scrollTop : 0;
+  listEl.replaceChildren(...nodes);
+  if (scroller) scroller.scrollTop = top;
+  return true;
+}
+
 function renderInbox() {
   const list = [...state.sessions.values()].sort((a, b) => b.started - a.started);
   const attn = list.filter(needsAttention);
@@ -81,8 +92,8 @@ function renderInbox() {
   $('#attn-wrap').hidden = attn.length === 0;
   $('#attn-count').textContent = String(attn.length);
   $('#attn-sub').textContent = t('{n} sessions with activity, results, questions or errors.', { n: attn.length });
-  $('#attn-list').replaceChildren(...attn.map(sessionCard));
-  $('#session-list').replaceChildren(...rest.map(sessionCard));
+  swapIfChanged($('#attn-list'), attn.map(sessionCard));
+  swapIfChanged($('#session-list'), rest.map(sessionCard));
   const active = list.filter((s) => s.status === 'running' || s.status === 'starting').length;
   $('#agents-count').textContent = list.length ? `(${t('{n} active', { n: active })})` : '';
   $('#empty-inbox').hidden = list.length > 0;

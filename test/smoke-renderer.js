@@ -131,6 +131,25 @@
   Layout.show('ci');
   r.ciNoRemote = Boolean(await until(() => $('#ci-head').textContent.includes('No GitHub or GitLab remote'), 5000));
 
+  // ---- no flicker: polling must not rebuild what did not change ----
+  Layout.show('git'); await wait(600);
+  await GitView.refresh(); await wait(300);
+  const gitRenders = GitView.renders; const gitDiffRenders = GitView.diffRenders;
+  const rowMarker = $('#git-files').firstElementChild; const optMarker = $('#git-branch').firstElementChild; const commitMarker = $('#git-log').firstElementChild;
+  $('#insp-git').scrollTop = 25;
+  for (let i = 0; i < 4; i++) { await GitView.refresh(); await wait(150); }
+  r.gitNoRebuild = GitView.renders === gitRenders && GitView.diffRenders === gitDiffRenders && $('#git-files').firstElementChild === rowMarker
+    && $('#git-branch').firstElementChild === optMarker && $('#git-log').firstElementChild === commitMarker;
+  await h.write(SMOKE_DIR + BS + 'brand-new.txt', 'x');                                  // a real change is drawn
+  await GitView.refresh(); await wait(300);
+  r.gitRedrawsOnChange = GitView.renders === gitRenders + 1 && [...document.querySelectorAll('#git-files .gf')].some((n) => n.textContent.includes('brand-new.txt'));
+  Layout.show('overview'); await wait(500); await JournalView.poll();
+  const jr = JournalView.renders; for (let i = 0; i < 3; i++) await JournalView.poll();
+  r.journalNoRebuild = JournalView.renders === jr;
+  renderInbox();                                                                      // bring it up to date first (the "x s ago" text moves on)
+  const card = document.querySelector('.card'); renderInbox(); renderInbox();
+  r.inboxNoRebuild = document.querySelector('.card') === card;
+
   // ---- German UI ----
   I18n.set('de'); renderInbox(); await wait(200);
   r.germanStart = $('#btn-start2').textContent;

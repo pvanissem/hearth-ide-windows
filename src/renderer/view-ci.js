@@ -1,61 +1,86 @@
 'use strict';
 // CI/CD: GitHub Actions and GitLab pipelines of the repository's remote.
+// Polling (15 s while something runs, else 60 s) never empties the pane: data is fetched first and only a change is
+// drawn, so an opened job log and the scroll position stay where they are.
 (() => {
   const C = window.hearth.ci;
   let info = null; let selected = null; let timer = null; let pipelines = [];
+  let lastSig = null; let lastJobsSig = null;
   const ICON = { success: '✓', failed: '✗', running: '↻', pending: '…', canceled: '⊘', skipped: '–', manual: '▶' };
   const active = () => $('#insp-ci').classList.contains('active');
 
+  /** Another project (or first start): show it from scratch. */
+  function reset() {
+    lastSig = null; lastJobsSig = null; selected = null; pipelines = [];
+    $('#ci-list').replaceChildren(); $('#ci-jobs').replaceChildren(); $('#ci-jobs-title').textContent = ''; $('#ci-log').hidden = true;
+  }
+
+  function drawList() {
+    const rows = pipelines.map((p) => {
+      const row = el('div', { class: `pipe ${p.id === selected ? 'sel' : ''}`, 'data-id': String(p.id) }, el('span', { class: `st-${p.status}` }, ICON[p.status] || '?'), el('span', {}, `${p.name}  ${p.ref || ''}`, el('small', { class: 'hint' }, `  ${p.sha}`)), el('small', { class: 'hint' }, p.created ? new Date(p.created).toLocaleString(I18n.lang === 'de' ? 'de-DE' : 'en-GB') : ''));
+      row.addEventListener('click', () => openPipeline(p));
+      return row;
+    });
+    if (!pipelines.length) rows.push(el('div', { class: 'hint' }, t('No pipelines yet.')));
+    const scroller = $('#insp-ci'); const top = scroller.scrollTop;
+    $('#ci-list').replaceChildren(...rows);
+    scroller.scrollTop = top;
+  }
+
   async function load() {
     const s = cur();
-    const head = $('#ci-head'); const list = $('#ci-list');
-    list.replaceChildren(); $('#ci-jobs').replaceChildren(); $('#ci-jobs-title').textContent = ''; $('#ci-log').hidden = true;
+    const head = $('#ci-head');
     if (!s) { head.textContent = t('No session selected'); return; }
+    let nextInfo; let nextPipes = [];
     try {
-      info = await C.info(s.directory);
-      if (!info) { head.textContent = t('No GitHub or GitLab remote found in this repository.'); return; }
-      head.textContent = `${info.provider === 'github' ? 'GitHub Actions' : 'GitLab'} - ${info.host}/${info.path}${info.hasToken ? '' : ' - ' + t('no token (Settings > Credentials)')}`;
-      if (!info.hasToken) return;
-      pipelines = await C.pipelines(s.directory);
+      nextInfo = await C.info(s.directory);
+      if (!nextInfo) { head.textContent = t('No GitHub or GitLab remote found in this repository.'); info = null; return; }
+      head.textContent = `${nextInfo.provider === 'github' ? 'GitHub Actions' : 'GitLab'} - ${nextInfo.host}/${nextInfo.path}${nextInfo.hasToken ? '' : ' - ' + t('no token (Settings > Credentials)')}`;
+      info = nextInfo;
+      if (!nextInfo.hasToken) return;
+      nextPipes = await C.pipelines(s.directory);
     } catch (err) { head.textContent = errMsg(err); return; }
-    for (const p of pipelines) {
-      const row = el('div', { class: `pipe ${p.id === selected ? 'sel' : ''}` }, el('span', { class: `st-${p.status}` }, ICON[p.status] || '?'), el('span', {}, `${p.name}  ${p.ref || ''}`, el('small', { class: 'hint' }, `  ${p.sha}`)), el('small', { class: 'hint' }, p.created ? new Date(p.created).toLocaleString(I18n.lang === 'de' ? 'de-DE' : 'en-GB') : ''));
-      row.addEventListener('click', () => openPipeline(p));
-      list.append(row);
-    }
-    if (!pipelines.length) list.append(el('div', { class: 'hint' }, t('No pipelines yet.')));
-    if (selected) { const p = pipelines.find((x) => x.id === selected); if (p) openPipeline(p, true); }
+    if (s !== cur()) return;                          // the user switched sessions meanwhile
+    pipelines = nextPipes;
+    const sig = JSON.stringify([s.id, I18n.lang, pipelines, selected]);
+    if (sig !== lastSig) { lastSig = sig; drawList(); }
+    if (selected) { const p = pipelines.find((x) => x.id === selected); if (p) await openPipeline(p, true); }
     schedule();
   }
 
   async function openPipeline(p, keep) {
     const s = cur(); selected = p.id;
-    if (!keep) $('#ci-log').hidden = true;
-    document.querySelectorAll('#ci-list .pipe').forEach((r) => r.classList.remove('sel'));
+    if (!keep) { $('#ci-log').hidden = true; lastJobsSig = null; }
+    document.querySelectorAll('#ci-list .pipe').forEach((r) => r.classList.toggle('sel', r.dataset.id === String(p.id)));
     $('#ci-jobs-title').textContent = `${p.name} - ${t(p.status)}`;
-    const box = $('#ci-jobs'); box.replaceChildren();
+    let jobs;
+    try { jobs = await C.jobs(s.directory, p.id); } catch (err) { $('#ci-jobs').replaceChildren(el('div', { class: 'hint' }, errMsg(err))); lastJobsSig = null; return; }
+    const sig = JSON.stringify([p.id, p.status, jobs, I18n.lang]);
+    if (sig === lastJobsSig) return;                  // same jobs: leave the list (and the open log) alone
+    lastJobsSig = sig;
+
+    const nodes = [];
     const bar = el('div', { class: 'row wrap' });
     for (const [label, fn] of [[t('Retry'), () => C.retry(s.directory, p.id)], [t('Cancel'), () => C.cancel(s.directory, p.id)], [t('Open in browser'), () => window.hearth.open(p.url)]]) {
       const b = el('button', { class: 'ghost' }, label);
       b.addEventListener('click', async () => { try { await fn(); setTimeout(load, 800); } catch (err) { alert(errMsg(err)); } });
       bar.append(b);
     }
-    box.append(bar);
-    try {
-      for (const j of await C.jobs(s.directory, p.id)) {
-        const row = el('div', { class: 'pipe' }, el('span', { class: `st-${j.status}` }, ICON[j.status] || '?'), el('span', {}, j.name, el('small', { class: 'hint' }, `  ${j.stage}`)), el('span', {}));
-        row.addEventListener('click', async () => {
-          const pre = $('#ci-log'); pre.hidden = false; pre.textContent = t('Loading...');
-          try { pre.textContent = await C.log(s.directory, j.id); pre.scrollTop = pre.scrollHeight; } catch (err) { pre.textContent = errMsg(err); }
-        });
-        const acts = row.lastChild;
-        const rb = el('button', { class: 'ghost' }, t('Retry'));
-        rb.addEventListener('click', async (e) => { e.stopPropagation(); try { await C.retryJob(s.directory, j.id); setTimeout(load, 800); } catch (err) { alert(errMsg(err)); } });
-        acts.append(rb);
-        if (j.status === 'manual') { const pb = el('button', { class: 'ghost' }, t('Play')); pb.addEventListener('click', async (e) => { e.stopPropagation(); try { await C.playJob(s.directory, j.id); setTimeout(load, 800); } catch (err) { alert(errMsg(err)); } }); acts.append(pb); }
-        box.append(row);
-      }
-    } catch (err) { box.append(el('div', { class: 'hint' }, errMsg(err))); }
+    nodes.push(bar);
+    for (const j of jobs) {
+      const row = el('div', { class: 'pipe' }, el('span', { class: `st-${j.status}` }, ICON[j.status] || '?'), el('span', {}, j.name, el('small', { class: 'hint' }, `  ${j.stage}`)), el('span', {}));
+      row.addEventListener('click', async () => {
+        const pre = $('#ci-log'); pre.hidden = false; pre.textContent = t('Loading...');
+        try { pre.textContent = await C.log(s.directory, j.id); pre.scrollTop = pre.scrollHeight; } catch (err) { pre.textContent = errMsg(err); }
+      });
+      const acts = row.lastChild;
+      const rb = el('button', { class: 'ghost' }, t('Retry'));
+      rb.addEventListener('click', async (e) => { e.stopPropagation(); try { await C.retryJob(s.directory, j.id); setTimeout(load, 800); } catch (err) { alert(errMsg(err)); } });
+      acts.append(rb);
+      if (j.status === 'manual') { const pb = el('button', { class: 'ghost' }, t('Play')); pb.addEventListener('click', async (e) => { e.stopPropagation(); try { await C.playJob(s.directory, j.id); setTimeout(load, 800); } catch (err) { alert(errMsg(err)); } }); acts.append(pb); }
+      nodes.push(row);
+    }
+    $('#ci-jobs').replaceChildren(...nodes);
   }
 
   // 15 s while something runs, otherwise 60 s - only while the tab is visible
@@ -84,7 +109,8 @@
   });
   $('#ci-token').addEventListener('click', () => { $('#btn-settings').click(); document.querySelector('#set-tabs [data-tab="creds"]').click(); if (info) $('#cred-host').value = info.host; });
 
-  document.addEventListener('hearth:select', () => { selected = null; load(); });
+  document.addEventListener('hearth:select', () => { reset(); load(); });
+  document.addEventListener('hearth:lang', () => { lastSig = null; lastJobsSig = null; if (active()) load(); });
   document.addEventListener('hearth:tab', (e) => { if (e.detail === 'ci') load(); });
   window.CIView = { load };
 })();
