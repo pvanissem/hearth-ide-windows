@@ -65,7 +65,7 @@ function publicSession(s) {
 function createWindow() {
   win = new BrowserWindow({
     width: 1600, height: 960, minWidth: 1000, minHeight: 600, backgroundColor: '#0e0a12', title: 'Hearth IDE',
-    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon-256.png'),
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.ico'),
     // Own title bar (the renderer draws it); Windows draws the caption buttons over its right end. Mica shows through the sidebar.
     titleBarStyle: 'hidden', titleBarOverlay: { color: '#0e0a12', symbolColor: '#e9dfe6', height: 40 }, backgroundMaterial: 'mica',
     // backgroundThrottling off: agents keep producing output (and statuses, notifications) while the window is behind others.
