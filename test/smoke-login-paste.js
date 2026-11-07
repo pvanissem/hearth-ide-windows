@@ -24,6 +24,11 @@
   await window.hearth.clipboard.write('FAKECODETWO');
   state.terms.get(s.id).host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   r.rightClickPasted = await until(() => strip(text[s.id] || '').includes('FAKECODETWO'), 5000);
+  // The typical slip: the sign-in LINK is still in the clipboard. It must not be sent as the code.
+  await window.hearth.clipboard.write('https://claude.com/cai/oauth/authorize?code=true&client_id=SLIPCHECK');
+  state.terms.get(s.id).host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  await wait(700);
+  r.linkBlocked = (document.getElementById('toast')?.textContent || '').includes('sign-in link') && !strip(text[s.id] || '').includes('SLIPCHECK');
   // Is the input delivered although it is not shown? Confirm it: a (wrong) code makes Claude answer.
   const before = strip(text[s.id] || '').length;
   await window.hearth.clipboard.write('NOTAREALCODE#state123');

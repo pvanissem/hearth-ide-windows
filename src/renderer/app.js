@@ -149,11 +149,20 @@ function attachTerminal(s) {
   const pasteClipboard = async () => {
     const text = await window.hearth.clipboard.read();
     if (!text) { toast(t('The clipboard is empty')); return; }
+    // A sign-in run waits for the code from the browser page. The link is still in the clipboard after copying it from the
+    // terminal, and pasting that gives "That code wasn't accepted": stop it here.
+    let odd = false;
+    if (s.login && s.status !== 'done' && s.status !== 'failed') {
+      const kind = TermKeys.classifySignInPaste(text);
+      if (kind === 'link') { toast(t('That is the sign-in link, not the code. Open the link in your browser, sign in, press "Copy code" on that page, then paste again.')); return; }
+      odd = kind === 'odd';
+    }
     if (TermKeys.needsConfirm(text) && !confirm(t('Paste {n} lines into the terminal?', { n: text.replace(/[\r\n]+$/, '').split(/\r?\n/).length }))) return;
     term.paste(text);
     term.focus();
     // Some prompts (the sign-in code of an agent) show nothing while you paste: say that it arrived.
-    toast(t('Pasted {n} characters. Some prompts do not show them; press Enter to send.', { n: text.replace(/[\r\n]+$/, '').length }));
+    const n = text.replace(/[\r\n]+$/, '').length;
+    toast(odd ? t('Pasted {n} characters, but this does not look like the sign-in code (it looks like abc123...#xyz456...). Check the page in your browser.', { n }) : t('Pasted {n} characters. Some prompts do not show them; press Enter to send.', { n }));
   };
   term.attachCustomKeyEventHandler((e) => {
     const a = TermKeys.action(e, term.hasSelection());

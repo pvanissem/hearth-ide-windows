@@ -3,7 +3,9 @@
 I18n.register('de', {
   // terminal
   'Paste {n} lines into the terminal?': '{n} Zeilen ins Terminal einfügen?',
-  'Sign-in: click the link in the terminal (it opens in your browser), then paste the code here with Ctrl+V or a right-click. The code is not shown while you paste; press Enter to send it.': 'Anmeldung: Klicke auf den Link im Terminal (er öffnet sich im Browser) und füge den Code danach mit Strg+V oder Rechtsklick hier ein. Der Code wird beim Einfügen nicht angezeigt; sende ihn mit Enter.',
+  'Sign-in: click the link in the terminal (it opens in your browser), then paste the code here (use "Copy code" on that page) with Ctrl+V or a right-click. It is not shown while you paste; press Enter to send it.': 'Anmeldung: Klicke auf den Link im Terminal (er öffnet sich im Browser) und füge den Code danach hier ein (auf der Seite „Copy code“ benutzen), mit Strg+V oder Rechtsklick. Er wird beim Einfügen nicht angezeigt; sende ihn mit Enter.',
+  'That is the sign-in link, not the code. Open the link in your browser, sign in, press "Copy code" on that page, then paste again.': 'Das ist der Anmelde-Link, nicht der Code. Öffne den Link im Browser, melde dich an, drücke auf der Seite „Copy code“ und füge dann erneut ein.',
+  'Pasted {n} characters, but this does not look like the sign-in code (it looks like abc123...#xyz456...). Check the page in your browser.': '{n} Zeichen eingefügt, aber das sieht nicht wie der Anmelde-Code aus (er sieht aus wie abc123...#xyz456...). Prüfe die Seite im Browser.',
   'Copied': 'Kopiert', 'The clipboard is empty': 'Die Zwischenablage ist leer',
   'Pasted {n} characters. Some prompts do not show them; press Enter to send.': '{n} Zeichen eingefügt. Manche Eingaben zeigen sie nicht an; sende mit Enter.',
   // panes
