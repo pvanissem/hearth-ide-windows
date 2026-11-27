@@ -86,7 +86,7 @@ test('git status parsing: branch without upstream and branch names with dots', (
 
 test('status tracker: running -> needs-input on prompt, bell, exit', async () => {
   let t = 0; const seen = [];
-  const tr = new StatusTracker((s) => seen.push(s), () => t);
+  const tr = new StatusTracker((s) => seen.push(s.state), { now: () => t });
   tr.data('working...');
   assert.equal(tr.state, 'running');
   tr.data('Allow this edit? [y/n] ');

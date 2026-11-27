@@ -5,19 +5,25 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const pty = require('node-pty');
 const { execFile, execFileSync } = require('node:child_process');
-const { AGENTS } = require('./agents');
+const agentsLib = require('./agents');
+const { AGENTS } = agentsLib;
 const sandbox = require('./sandbox');
 const settings = require('./settings');
 const git = require('./git');
 const fileops = require('./fileops');
 const { History } = require('./history');
-const { StatusTracker } = require('./status');
+const statusLib = require('./status');
+const { StatusTracker } = statusLib;
 const journalLib = require('./journal');
 const buildLib = require('./build');
 const testsLib = require('./tests');
 const searchLib = require('./search');
 const archLib = require('./arch');
 const ci = require('./ci');
+const changesLib = require('./changes');
+const commitMsg = require('./commitmsg');
+const specsLib = require('./specs');
+const hooksLib = require('./hooks');
 const updates = require('./updates');
 const { Credentials } = require('./creds');
 const { Leases } = require('./leases');
@@ -60,7 +66,8 @@ function requireWorkspace(p) {
 }
 
 function publicSession(s) {
-  return { id: s.id, kind: s.kind, login: Boolean(s.login), name: AGENTS[s.kind].name, directory: s.directory, sandboxed: s.sandboxed, backend: s.backend, status: s.status.state, started: s.started, title: s.title };
+  return { id: s.id, kind: s.kind, login: Boolean(s.login), name: AGENTS[s.kind].name, directory: s.directory, sandboxed: s.sandboxed, backend: s.backend, status: s.status.state, info: s.status.info,
+    started: s.started, title: s.title, options: s.options, sessionID: s.status.sessionID || s.resumeID || null, restartPending: Boolean(s.restartPending) };
 }
 
 function createWindow() {
@@ -82,7 +89,7 @@ function createWindow() {
 ipcMain.handle('env:detect', (_e, force) => sandbox.detect(Boolean(force), settings.load().backend));
 ipcMain.handle('settings:get', () => settings.load());
 ipcMain.handle('settings:set', (_e, next) => settings.save(next));
-ipcMain.handle('agents:list', () => Object.entries(AGENTS).map(([id, a]) => ({ id, name: a.name, install: a.install, login: Boolean(a.login) })));
+ipcMain.handle('agents:list', () => Object.entries(AGENTS).map(([id, a]) => ({ id, name: a.name, install: a.install, login: Boolean(a.login), models: a.models || [], efforts: a.efforts || [], commitMessages: commitMsg.SUPPORTED.includes(id) })));
 ipcMain.handle('app:version', () => app.getVersion());
 // The renderer tells us its theme colours so the native caption buttons match.
 ipcMain.handle('win:theme', (_e, { bg, fg }) => {
@@ -130,43 +137,118 @@ async function cloneInto(url, parent) {
 const history = new History(path.join(process.env.HEARTH_HOME || require('node:os').homedir(), '.hearth', 'sessions.json'));
 ipcMain.handle('history:list', () => history.list().filter((x) => AGENTS[x.kind] && fs.existsSync(x.directory)));
 ipcMain.handle('history:forget', (_e, { kind, directory }) => history.forget(kind, String(directory)));
-ipcMain.handle('session:start', async (_e, { kind, directory, login = false, resumeID, cloneUrl, continueLast = false }) => {
-  if (!AGENTS[kind]) throw new Error('Unknown agent');
-  let dir = requireWorkspace(directory);
-  if (cloneUrl) dir = await cloneInto(cloneUrl, dir);
+/** Resumable conversations of an agent in a folder (the agent told Hearth their ids) and the model choice last used there. */
+ipcMain.handle('history:sessions', (_e, { kind, directory }) => (AGENTS[kind]?.resume('x').length ? history.sessions(kind, String(directory)).slice(0, 12) : []));
+ipcMain.handle('history:options', (_e, directory) => history.options(String(directory)));
+
+/** Starts (or restarts) the agent process of a session record. */
+async function launchSession(s) {
   const cfg = settings.load();
-  const id = 'run_' + crypto.randomBytes(5).toString('hex');
+  const { kind, login } = s;
   const useJournal = cfg.journal && !login && ['claude', 'codex'].includes(kind);
-  const helperJournal = cfg.journal && !login;
-  const lease = leases.acquire(dir);
-  let launch; let term;
+  const lease = leases.acquire(s.directory);
+  let launch; let term; let hookArgs = [];
   try {
+    const mode = cfg.allowUnsandboxed && !(await sandbox.detect(false, cfg.backend)).backend ? 'none' : 'sandbox';
+    const runDir = sandbox.runDirectory(s.id);
+    const det = await sandbox.detect(false, cfg.backend);
+    // status hooks (Claude Code hooks, Codex notify) through the helper copied into the run folder
+    hookArgs = !login && mode === 'sandbox' && det.backend === 'native' && det.helper ? agentsLib.statusHookArgs(kind, journalLib.installHelper(runDir, det.helper), runDir) : [];
+    const resume = s.resumeID && statusLib.validSessionID(s.resumeID) ? s.resumeID : undefined;
     launch = await sandbox.prepare({
-      purpose: 'agent', kind, runID: id, directory: dir, settings: cfg, resumeID,
-      mode: cfg.allowUnsandboxed && !(await sandbox.detect(false, cfg.backend)).backend ? 'none' : 'sandbox',
-      extraArgs: [...(login && AGENTS[kind].login ? AGENTS[kind].login : []), ...(continueLast && !login && AGENTS[kind].continueLast ? AGENTS[kind].continueLast : []), ...(useJournal ? journalLib.agentArguments(kind) : [])],
-      journal: helperJournal, secretEnv: creds.envValues(),
+      purpose: 'agent', kind, runID: s.id, directory: s.directory, settings: cfg, resumeID: login ? undefined : resume, mode,
+      extraArgs: [...(login && AGENTS[kind].login ? AGENTS[kind].login : []), ...(!resume && s.continueLast && !login && AGENTS[kind].continueLast ? AGENTS[kind].continueLast : []),
+        ...(login ? [] : agentsLib.optionArgs(kind, s.options)), ...hookArgs, ...(useJournal ? journalLib.agentArguments(kind) : [])],
+      journal: cfg.journal && !login, secretEnv: creds.envValues(),
     });
     leases.attach(lease, launch);
-    term = pty.spawn(launch.file, launch.args, { name: 'xterm-256color', cols: 120, rows: 32, cwd: launch.cwd, env: launch.env, useConpty: true });
+    term = pty.spawn(launch.file, launch.args, { name: 'xterm-256color', cols: s.cols || 120, rows: s.rows || 32, cwd: launch.cwd, env: launch.env, useConpty: true });
   } catch (e) { leases.release(lease); throw e; }
-  if (!login) history.record(kind, dir);
-  const status = new StatusTracker((state) => send('session:status', { id, status: state }));
-  const reader = new journalLib.JournalReader(path.join(sandbox.runDirectory(id), journalLib.FILE_NAME));
-  const s = { id, kind, login, directory: dir, sandboxed: launch.sandboxed, backend: launch.backend, lease, term, status, reader, started: Date.now(), title: path.basename(dir) };
+  Object.assign(s, { sandboxed: launch.sandboxed, backend: launch.backend, lease, term });
+  s.status.source = hookArgs.length ? (AGENTS[kind].statusSource || 'terminal') : 'terminal';
+  s.status.exited = false;
+  term.onData((d) => { if (s.term !== term) return; s.status.data(d); send('session:data', { id: s.id, data: d }); });
+  term.onExit(({ exitCode }) => {
+    if (s.term !== term) return;
+    pollEvents(s);
+    leases.release(s.lease);
+    if (s.restartAfterExit && sessions.has(s.id)) {
+      s.restartAfterExit = false; s.restartPending = false;
+      s.resumeID = s.status.sessionID || s.resumeID; s.continueLast = !s.resumeID;
+      send('session:data', { id: s.id, data: '\r\n\x1b[2m[restarting with the new rules]\x1b[0m\r\n' });
+      launchSession(s).then(() => { s.status.set('starting'); send('session:info', publicSession(s)); }, (e) => { s.status.exit(1); send('session:exit', { id: s.id, code: 1, error: plainError(e) }); });
+      return;
+    }
+    s.status.exit(exitCode); send('session:exit', { id: s.id, code: exitCode });
+  });
+}
+
+ipcMain.handle('session:start', async (_e, { kind, directory, login = false, resumeID, cloneUrl, continueLast = false, options = {} }) => {
+  if (!AGENTS[kind]) throw new Error('Unknown agent');
+  // Folders the user started sessions in before (Hearth's own history, outside any project) count as chosen.
+  const known = history.list().find((x) => path.resolve(x.directory).toLowerCase() === path.resolve(String(directory)).toLowerCase() && fs.existsSync(x.directory));
+  if (known) workspaces.add(path.resolve(known.directory));
+  let dir = requireWorkspace(directory);
+  if (cloneUrl) dir = await cloneInto(cloneUrl, dir);
+  // A session id to resume must be one Hearth saw for this agent and folder (never a free-form argument).
+  if (resumeID && !history.sessions(kind, dir).some((x) => x.sessionID === resumeID)) throw new Error('Unknown session');
+  const id = 'run_' + crypto.randomBytes(5).toString('hex');
+  const opts = { model: options.model || null, effort: options.effort || null };
+  const s = { id, kind, login, directory: dir, options: opts, resumeID: resumeID || null, continueLast, started: Date.now(), title: path.basename(dir), restartPending: false, restartAfterExit: false };
+  s.status = new StatusTracker((info) => { send('session:status', { id, status: info.state, info }); if (s.restartPending && statusLib.restartsNow(info.state)) restartNow(s); });
+  s.reader = new journalLib.JournalReader(path.join(sandbox.runDirectory(id), journalLib.FILE_NAME));
+  s.events = new journalLib.LineReader(path.join(sandbox.runDirectory(id), 'events.jsonl'));
+  if (resumeID) { const h = history.sessions(kind, dir).find((x) => x.sessionID === resumeID); if (h?.title) s.title = h.title; }
+  await launchSession(s);
   sessions.set(id, s);
-  term.onData((d) => { status.data(d); send('session:data', { id, data: d }); });
-  term.onExit(({ exitCode }) => { status.exit(exitCode); send('session:exit', { id, code: exitCode }); });
+  if (!login) { history.record(kind, dir); history.setOptions(dir, opts); }
   return publicSession(s);
 });
-ipcMain.on('session:input', (_e, { id, data }) => { sessions.get(id)?.term.write(String(data)); });
+ipcMain.on('session:input', (_e, { id, data }) => { const s = sessions.get(id); if (!s) return; s.status.input(data); s.term.write(String(data)); });
 ipcMain.on('session:resize', (_e, { id, cols, rows }) => {
   const s = sessions.get(id);
-  if (s && cols > 0 && rows > 0) { try { s.term.resize(Math.floor(cols), Math.floor(rows)); } catch { /* exited */ } }
+  if (s && cols > 0 && rows > 0) { s.cols = Math.floor(cols); s.rows = Math.floor(rows); try { s.term.resize(s.cols, s.rows); } catch { /* exited */ } }
 });
-ipcMain.handle('session:stop', (_e, id) => { const s = sessions.get(id); if (s) { try { s.term.kill(); } catch { /* exited */ } } });
-ipcMain.handle('session:remove', (_e, id) => { const s = sessions.get(id); if (s) { try { s.term.kill(); } catch { /* */ } sessions.delete(id); leases.release(s.lease); } });
+ipcMain.handle('session:stop', (_e, id) => { const s = sessions.get(id); if (s) { s.restartAfterExit = false; try { s.term.kill(); } catch { /* exited */ } } });
+ipcMain.handle('session:remove', (_e, id) => { const s = sessions.get(id); if (s) { s.restartAfterExit = false; sessions.delete(id); try { s.term.kill(); } catch { /* */ } leases.release(s.lease); } });
 ipcMain.handle('session:list', () => [...sessions.values()].map(publicSession));
+ipcMain.handle('session:rename', (_e, { id, title }) => { const s = session(id); s.title = String(title || '').trim().slice(0, 80) || s.title; s.customTitle = true; send('session:info', publicSession(s)); });
+/** Types a prompt into the agent's terminal and submits it (Enter after a short pause, like a person would). */
+function sendPrompt(id, text) {
+  const s = sessions.get(id); if (!s || s.status.exited) throw new Error('The agent is not running');
+  const one = String(text).replace(/\r?\n/g, ' ');
+  s.term.write(one);
+  setTimeout(() => { try { s.term.write('\r'); s.status.input('\r'); } catch { /* exited */ } }, 150);
+}
+ipcMain.handle('session:prompt', (_e, { id, text }) => sendPrompt(id, text));
+
+// Restart after rule changes: waiting agents now, working ones after their current turn (no work is lost).
+function restartNow(s) { s.restartPending = false; s.restartAfterExit = true; try { s.term.kill(); } catch { /* exited */ } }
+ipcMain.handle('session:restartAll', () => {
+  let now = 0; let later = 0;
+  for (const s of sessions.values()) {
+    if (s.login || s.status.exited) continue;
+    if (statusLib.restartsNow(s.status.state)) { restartNow(s); now++; } else { s.restartPending = true; later++; send('session:info', publicSession(s)); }
+  }
+  return { now, later };
+});
+
+/** Events from Claude hooks / Codex notify. */
+function pollEvents(s) {
+  if (!s.events) return;
+  for (const ev of s.events.poll()) {
+    const r = s.status.applyEvent(ev);
+    if (r.sessionID || r.title) {
+      if (r.title && !s.customTitle && !s.resumeID) s.title = r.title;
+      if (s.status.sessionID) history.remember(s.kind, s.directory, s.status.sessionID, s.title);
+      send('session:info', publicSession(s));
+    }
+  }
+}
+setInterval(() => {
+  for (const s of sessions.values()) if (!s.status.exited) pollEvents(s);
+  try { hookEngine.tick(); } catch { /* next tick */ }
+}, 500);
 
 // ---- Overview (journal) ----
 const session = (id) => { const s = sessions.get(id); if (!s) throw new Error('Unknown session'); return s; };
@@ -303,6 +385,111 @@ ipcMain.handle('ci:workflows', async (_e, dir) => (await ciClient(dir)).workflow
 ipcMain.handle('ci:run', async (_e, dir, ref, workflow) => (await ciClient(dir)).run(ref, workflow));
 ipcMain.handle('ci:changeRequest', async (_e, dir, req) => (await ciClient(dir)).createChangeRequest(req));
 
+// ---- Git: details for the wide pane, commit message by an agent ----
+for (const n of ['showCommit', 'stashShow', 'branchLog', 'untrackedDiff']) ipcMain.handle('git:' + n, gitOp((d, ...a) => git[n](d, ...a)));
+ipcMain.handle('git:generateMessage', async (_e, dir, kind) => {
+  const root = requireWorkspace(dir);
+  if (!commitMsg.SUPPORTED.includes(kind)) throw new Error('This agent cannot write commit messages');
+  const st = await git.status(root);
+  const inp = await commitMsg.input((args) => git.raw(root, args), st.files);
+  if (!inp) throw new Error('There are no changes to describe.');
+  const cfg = settings.load();
+  const runID = 'msg_' + crypto.randomBytes(5).toString('hex');
+  const lease = leases.acquire(root);
+  try {
+    const launch = await sandbox.prepare({ purpose: 'agent', kind, runID, directory: root, settings: { ...cfg, network: 'internet' }, mode: 'sandbox', extraArgs: commitMsg.args(kind), secretEnv: creds.envValues() });
+    leases.attach(lease, launch);
+    const r = await commitMsg.runOnce(launch, commitMsg.prompt(inp));
+    const message = commitMsg.clean(r.stdout);
+    if (r.code !== 0 || !commitMsg.validMessage(message)) {
+      const detail = commitMsg.clean((r.code === 0 ? r.stdout : `${r.stderr}\n${r.stdout}`).split(/\r?\n/).filter((l) => l.trim()).slice(-3).join('\n'));
+      throw new Error(detail ? `The agent returned no message: ${detail}` : 'The agent returned no message.');
+    }
+    return message;
+  } finally {
+    leases.release(lease);
+    fs.promises.rm(sandbox.runDirectory(runID), { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+// ---- merge / pull requests: review ----
+async function crClient(dir) { return new changesLib.ChangeRequests(await ciClient(dir)); }
+const crOp = (fn, writing = false) => async (_e, dir, ...a) => {
+  const c = await crClient(dir);
+  try { return await fn(c, ...a); } catch (e) { throw new Error(changesLib.describe(e, c.c.remote.provider, writing)); }
+};
+ipcMain.handle('cr:list', crOp((c, state) => c.list(state)));
+ipcMain.handle('cr:detail', crOp((c, n) => c.detail(n)));
+ipcMain.handle('cr:files', crOp((c, n) => c.files(n)));
+ipcMain.handle('cr:comments', crOp((c, n) => c.comments(n)));
+ipcMain.handle('cr:comment', crOp((c, n, body, anchor, refs) => c.comment(n, body, anchor, refs), true));
+ipcMain.handle('cr:reply', crOp((c, n, thread, body) => c.reply(n, thread, body), true));
+ipcMain.handle('cr:review', crOp((c, n, verdict, body) => c.review(n, verdict, body), true));
+ipcMain.handle('cr:merge', crOp(async (c, n, opts) => c.merge(n, opts, await c.detail(n)), true));
+
+// ---- specs ----
+const lang = () => settings.load().language === 'de' ? 'de' : 'en';
+ipcMain.handle('specs:scan', (_e, dir) => { const root = requireWorkspace(dir); return { specs: specsLib.scan(root), steering: specsLib.steering(root) }; });
+ipcMain.handle('specs:create', (_e, dir, opts) => specsLib.create(requireWorkspace(dir), opts || {}).id);
+ipcMain.handle('specs:approve', (_e, dir, id, phase) => specsLib.approve(requireWorkspace(dir), id, phase));
+ipcMain.handle('specs:revoke', (_e, dir, id, phase) => specsLib.revoke(requireWorkspace(dir), id, phase));
+ipcMain.handle('specs:update', (_e, dir, id, change) => specsLib.update(requireWorkspace(dir), id, change || {}));
+ipcMain.handle('specs:setTask', (_e, dir, id, line, done) => specsLib.setTask(requireWorkspace(dir), id, line, done));
+/** Sends a spec step to the agent of a session in that folder; the prompt is built here from the action name. */
+ipcMain.handle('specs:send', (_e, { dir, sessionId, id, action, opts }) => {
+  const root = requireWorkspace(dir);
+  const s = session(sessionId);
+  if (path.resolve(s.directory) !== root) throw new Error('That session works in another folder');
+  sendPrompt(sessionId, specsLib.promptFor(root, id, action, opts || {}, lang()));
+});
+
+// ---- agent hooks ----
+const hookTrust = new hooksLib.Trust(path.join(process.env.HEARTH_HOME || require('node:os').homedir(), '.hearth', 'hook-trust.json'));
+const hookEngine = new hooksLib.Engine({
+  trust: hookTrust,
+  runs: () => [...sessions.values()].filter((s) => !s.login).map((s) => ({ id: s.id, directory: path.resolve(s.directory), status: s.status.state, running: !s.status.exited, selected: s.id === selectedSession })),
+  send: (id, text) => { try { sendPrompt(id, text); } catch { /* exited meanwhile */ } },
+  runCommand: (root, command, timeout) => new Promise((resolve) => {
+    startTask(root, { dir: root, command, title: command }, 'hook').then(({ id }) => {
+      const run = runs.get(id);
+      const timer = setTimeout(() => run.stop(), Math.max(5, Math.min(3600, timeout || 600)) * 1000);
+      const check = setInterval(() => { if (run.state !== 'running') { clearInterval(check); clearTimeout(timer); resolve({ code: run.state === 'stopped' ? null : run.code, output: run.text }); } }, 300);
+    }, (e) => resolve({ code: -1, output: plainError(e) }));
+  }),
+});
+let selectedSession = null;
+hookEngine.onChange = () => { clearTimeout(hookEngine.notify); hookEngine.notify = setTimeout(() => send('hooks:changed'), 100); };
+ipcMain.on('session:selected', (_e, id) => { selectedSession = typeof id === 'string' ? id : null; });
+const hookView = (root) => {
+  const set = hookEngine.hooks(root);
+  return { hooks: set.hooks.map((h) => ({ ...h, trusted: hookEngine.isTrusted(root, h) })), problems: set.problems,
+    files: Object.keys(set.hashes).map((f) => ({ file: f, trusted: hookTrust.isTrusted(root, f, set.hashes[f]) })),
+    activity: hookEngine.activity.filter((a) => a.root === root), templates: hooksLib.TEMPLATES };
+};
+const hookById = (root, id) => { const h = hookEngine.hooks(root).hooks.find((x) => x.id === id); if (!h) throw new Error('Unknown hook'); return h; };
+ipcMain.handle('hooks:get', (_e, dir) => { const root = requireWorkspace(dir); hookEngine.reload(root); return hookView(root); });
+ipcMain.handle('hooks:create', (_e, dir, def) => { const root = requireWorkspace(dir); const rel = hooksLib.create(root, def || {}); hookEngine.wrote(root, rel, true); return rel; });
+ipcMain.handle('hooks:setEnabled', (_e, dir, id, on) => { const root = requireWorkspace(dir); const h = hookById(root, id); const was = hookEngine.isTrusted(root, h); hooksLib.setEnabled(root, h, on); hookEngine.wrote(root, h.file, was); });
+ipcMain.handle('hooks:remove', (_e, dir, id) => { const root = requireWorkspace(dir); const h = hookById(root, id); const was = hookEngine.isTrusted(root, h); hooksLib.remove(root, h); hookEngine.wrote(root, h.file, was); });
+ipcMain.handle('hooks:allow', (_e, dir, file) => { const root = requireWorkspace(dir); hookEngine.allow(root, String(file)); });
+ipcMain.handle('hooks:disallow', (_e, dir, file) => { const root = requireWorkspace(dir); hookEngine.disallow(root, String(file)); });
+ipcMain.handle('hooks:run', (_e, dir, id) => hookEngine.runManually(path.resolve(requireWorkspace(dir)), id));
+
+// ---- Explorer clipboard ----
+ipcMain.handle('fs:clipCopy', (_e, paths) => fileops.setClipboardFiles((Array.isArray(paths) ? paths : []).map(requireWorkspace)));
+/** Pastes the files Explorer put on the clipboard into a workspace folder (copies; the list is read here, not sent by the renderer). */
+ipcMain.handle('fs:clipPaste', async (_e, dir) => {
+  const dest = requireWorkspace(dir);
+  const files = await fileops.clipboardFiles();
+  const done = [];
+  for (const f of files) {
+    if (insideWorkspace(f) && path.resolve(f) === dest) continue;
+    done.push(await fileops.copyInto(f, dest));
+  }
+  return done;
+});
+ipcMain.handle('fs:clipHasFiles', () => fileops.clipboardFiles());
+
 // Smoke mode (tests): run a script in the renderer, print its JSON result, save a screenshot, quit.
 async function smoke() {
   ipcMain.handle('smoke:shot', async (_e, name) => {
@@ -330,7 +517,8 @@ function cleanupAll() {
   if (cleaned) return;
   cleaned = true;
   for (const r of runs.values()) r.stop();
-  for (const s of sessions.values()) { try { s.term.kill(); } catch { /* exited */ } }
+  for (const s of sessions.values()) { s.restartAfterExit = false; try { s.term.kill(); } catch { /* exited */ } }
+  hookEngine.close();
   leases.releaseAllSync();
 }
 app.on('before-quit', cleanupAll);

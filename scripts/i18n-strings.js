@@ -29,13 +29,19 @@ function collect() {
 // Texts that reach t() through a variable (status names, categories, filters).
 const EXTRAS = ['Starting', 'Running', 'Needs input', 'Idle', 'Done', 'Failed', 'planned', 'running', 'done', 'blocked', 'open', 'answered',
   'success', 'failed', 'pending', 'canceled', 'skipped', 'manual', 'finished', 'stopped', 'Definitions', 'Code', 'Imports', 'Comments',
-  'Symbols', 'Text', 'Chats', 'Sessions', 'Actions', 'Open', 'Steps', 'Decisions'];
+  'Symbols', 'Text', 'Chats', 'Sessions', 'Actions', 'Open', 'Steps', 'Decisions',
+  // status details from the main process, Git review, specs, hooks
+  'Error', 'Needs you', 'Working', 'Waiting for approval.', 'Has a question for you.', 'Needs you to sign in.', 'The agent needs your attention.',
+  'Ready to merge', 'Merge conflicts', 'Checking mergeability...', 'Not open', 'Marked as draft', 'Approvals missing', 'Some checks are failing', 'Merge commit', 'Squash and merge', 'Rebase and merge',
+  'Guided', 'Free', 'Feature', 'Bugfix', 'Refactoring', 'Requirements', 'Design', 'Tasks', 'Implementation', 'writes the requirements', 'writes the design', 'writes the tasks',
+  'implements task {id}', 'missing', 'draft', 'approved', 'changed', 'partly', 'implemented', 'Not covered: {topics}', 'Testing strategy', 'Every criterion can be tested',
+  'Agent saved a file', 'Agent finished its turn', 'Manually', 'sent to the agent', 'command failed', 'Keep tests up to date', 'Review each turn'];
 
 function missing() {
   const store = {};
   global.window = { I18n: null };
   global.I18n = { register: (code, entries) => { store[code] = { ...(store[code] || {}), ...entries }; } };
-  require(path.join(dir, 'i18n-de.js'));
+  for (const file of fs.readdirSync(dir).filter((x) => /^i18n-de.*.js$/.test(x))) require(path.join(dir, file));
   return collect().filter((s) => !(store.de && s in store.de));
 }
 

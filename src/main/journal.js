@@ -146,12 +146,15 @@ class JournalReader {
 const FILE_NAME = 'journal.jsonl';
 
 const INSTRUCTION = 'Hearth shows the user a tree of your work so they do not have to read all your output. '
-  + 'Record it with the shell command `hearth-journal` (already on PATH): '
-  + '`hearth-journal step <id> --parent <id> --title "..." --status planned|running|done|blocked` for each step, '
-  + '`hearth-journal decision <id> --parent <step-id> --title "..." --why "..." --rejected "alternative"` for every real choice between options, '
-  + 'and `hearth-journal question <id> --parent <id> --title "..." [--answer "..."]` for open questions. '
-  + 'Use short unique ids (s1, s2, d1, q1). Repeat a call with the same id to update it. '
-  + 'Keep titles under 80 characters. If the user tells you they revoked an entry, undo the dependent work and record the replacement.';
+  + 'Record it with the shell command `hearth-journal` (already on PATH). Every call costs a tool call, so batch: '
+  + 'join several entries in one call with ` + `, record the whole plan in one call at the start, and combine '
+  + 'status changes with the next real command instead of calling it after every small step. '
+  + 'Entries: `step <id> --parent <id> --title "..." --status planned|running|done|blocked`, '
+  + '`decision <id> --parent <step-id> --title "..." --why "..." --rejected "alternative"` (only for real choices between options), '
+  + '`question <id> --parent <id> --title "..." [--answer "..."]`. '
+  + 'Example: `hearth-journal step s1 --status done + step s2 --status running`. '
+  + 'Use short unique ids (s1, s2, d1, q1). Repeat an id to update it. Keep titles under 80 characters. '
+  + 'If the user tells you they revoked an entry, undo the dependent work and record the replacement.';
 
 /** Agent arguments that hand the instruction over as system/developer prompt, where the CLI has one. */
 function agentArguments(kind) {
@@ -170,9 +173,47 @@ function install(runDir, helperExe) {
   fs.mkdirSync(bin, { recursive: true });
   fs.copyFileSync(helperExe, path.join(bin, 'hearth-sandbox.exe'));
   fs.writeFileSync(path.join(bin, 'hearth-journal.cmd'), '@"%~dp0hearth-sandbox.exe" journal %*\r\n');
+  // Git Bash (Claude Code's shell on Windows) does not run .cmd files by bare name: a shell script next to it
+  fs.writeFileSync(path.join(bin, 'hearth-journal'), '#!/bin/sh\nexec "$(dirname "$0")/hearth-sandbox.exe" journal "$@"\n');
   const file = path.join(runDir, FILE_NAME);
   if (!fs.existsSync(file)) fs.writeFileSync(file, '');
   return bin;
 }
 
-module.exports = { Journal, JournalReader, validID, clean, INSTRUCTION, FILE_NAME, agentArguments, install };
+/** The helper in <run>\bin (for status events); returns its path. */
+function installHelper(runDir, helperExe) {
+  const bin = path.join(runDir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const exe = path.join(bin, 'hearth-sandbox.exe');
+  if (!fs.existsSync(exe)) fs.copyFileSync(helperExe, exe);
+  const events = path.join(runDir, 'events.jsonl');
+  if (!fs.existsSync(events)) fs.writeFileSync(events, '');
+  return exe;
+}
+
+/** Tails a JSON-lines file written from inside the sandbox: bounded reads, an endless line is skipped. */
+class LineReader {
+  constructor(file) { this.file = file; this.offset = 0; }
+  poll() {
+    let fd;
+    try { fd = fs.openSync(this.file, 'r'); } catch { return []; }
+    try {
+      const size = fs.fstatSync(fd).size;
+      if (size <= this.offset) return [];
+      const len = Math.min(size - this.offset, MAX_CHUNK);
+      const buf = Buffer.alloc(len);
+      fs.readSync(fd, buf, 0, len, this.offset);
+      const last = buf.lastIndexOf(10);
+      if (last < 0) { if (len >= MAX_CHUNK) this.offset += len; return []; }
+      this.offset += last + 1;
+      const out = [];
+      for (const raw of buf.subarray(0, last).toString('utf8').split('\n')) {
+        if (!raw.trim()) continue;
+        try { out.push(JSON.parse(raw)); } catch { /* not JSON */ }
+      }
+      return out;
+    } finally { fs.closeSync(fd); }
+  }
+}
+
+module.exports = { Journal, JournalReader, LineReader, validID, clean, INSTRUCTION, FILE_NAME, agentArguments, install, installHelper };

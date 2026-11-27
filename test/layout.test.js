@@ -26,7 +26,7 @@ function check(tree) {                      // invariants that must hold after e
 test('default layout: sessions | agent+editor | inspector views, nothing hidden', () => {
   const t = L.defaultLayout();
   check(t);
-  assert.equal(shape(t), 'row([sessions] [agent,editor] [files,git,overview,tests,arch,build,ci])');
+  assert.equal(shape(t), 'row([sessions] [agent,editor] [files,git,overview,tests,arch,build,ci,specs,hooks])');
   assert.deepEqual(L.hiddenViews(t), []);
 });
 
@@ -44,7 +44,7 @@ test('dropping on an edge splits: a new column, a new row, and next to a neighbo
   let t = L.defaultLayout();
   t = L.moveView(t, 'git', L.groupOf(t, 'agent').id, 'right');
   check(t);
-  assert.equal(shape(t), 'row([sessions] [agent,editor] [git] [files,overview,tests,arch,build,ci])');   // joins the existing row split
+  assert.equal(shape(t), 'row([sessions] [agent,editor] [git] [files,overview,tests,arch,build,ci,specs,hooks])');   // joins the existing row split
   t = L.moveView(t, 'ci', L.groupOf(t, 'agent').id, 'bottom');
   check(t);
   assert.match(shape(t), /col\(\[agent,editor\] \[ci\]\)/);
@@ -64,10 +64,10 @@ test('moving the last view out of a group removes the group and its splits colla
   let t = L.defaultLayout();
   t = L.moveView(t, 'sessions', L.groupOf(t, 'agent').id, 'center');
   check(t);
-  assert.equal(shape(t), 'row([agent,editor,sessions] [files,git,overview,tests,arch,build,ci])');
+  assert.equal(shape(t), 'row([agent,editor,sessions] [files,git,overview,tests,arch,build,ci,specs,hooks])');
   t = L.moveView(t, 'agent', L.groupOf(t, 'files').id, 'bottom');
   check(t);
-  assert.match(shape(t), /col\(\[files,git,overview,tests,arch,build,ci\] \[agent\]\)/);
+  assert.match(shape(t), /col\(\[files,git,overview,tests,arch,build,ci,specs,hooks] \[agent\]\)/);
 });
 
 test('dropping a lone view on its own edge changes nothing; reordering inside a group works', () => {

@@ -6,10 +6,10 @@ const os = require('node:os');
 
 const SAFE = ['-c', `core.hooksPath=${os.devNull}`, '-c', 'core.fsmonitor=false', '-c', 'core.pager=cat', '-c', 'core.quotepath=off'];
 
-function git(cwd, args, { input } = {}) {
+function git(cwd, args, { input, ok = [0] } = {}) {
   return new Promise((resolve, reject) => {
     const child = execFile('git', [...SAFE, ...args], { cwd, windowsHide: true, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never' }, timeout: 120000 },
-      (err, stdout, stderr) => (err ? reject(Object.assign(new Error((stderr || err.message).trim()), { code: err.code })) : resolve(stdout)));
+      (err, stdout, stderr) => (err && !ok.includes(err.code) ? reject(Object.assign(new Error((stderr || err.message).trim()), { code: err.code, stdout })) : resolve(stdout)));
     if (input != null) { child.stdin.end(input); }
   });
 }
@@ -153,7 +153,23 @@ const stashApply = async (cwd, ref) => git(cwd, ['stash', 'apply', stashRef(ref)
 const stashPop = async (cwd, ref) => git(cwd, ['stash', 'pop', stashRef(ref)]);
 const stashDrop = async (cwd, ref) => git(cwd, ['stash', 'drop', stashRef(ref)]);
 
+// ---- details for the wide Git pane: a commit, a stash, a branch's commits; untracked file as a diff ----
+const validHash = (h) => { if (typeof h !== 'string' || !/^[0-9a-f]{4,64}$/i.test(h)) throw new Error('Invalid commit'); return h; };
+const showCommit = async (cwd, hash) => git(cwd, ['show', '--no-color', '--no-ext-diff', '--stat', '--patch', '--format=commit %H%nAuthor: %an <%ae>%nDate:   %ad%n%n%B', validHash(hash)]);
+const stashShow = async (cwd, ref) => git(cwd, ['stash', 'show', '--no-color', '--include-untracked', '-p', stashRef(ref)]).catch(() => git(cwd, ['stash', 'show', '--no-color', '-p', stashRef(ref)]));
+async function branchLog(cwd, name, limit = 20) {
+  const out = await git(cwd, ['log', `-n${limit}`, '--pretty=format:%h%x1f%an%x1f%ar%x1f%s', need(name), '--']).catch(() => '');
+  return out.split('\n').filter(Boolean).map((l) => { const [hash, author, when, subject] = l.split('\x1f'); return { hash, author, when, subject }; });
+}
+async function untrackedDiff(cwd, file) {
+  if (typeof file !== 'string' || file.startsWith('-')) throw new Error('Invalid path');
+  return git(cwd, ['diff', '--no-color', '--no-index', '--', '/dev/null', file], { ok: [0, 1] });
+}
+/** Any read-only git command for the commit message generator (args are built in the main process, never by the renderer). */
+const raw = (cwd, args) => git(cwd, args, { ok: [0, 1] });
+
 module.exports = {
+  showCommit, stashShow, branchLog, untrackedDiff, raw,
   status, diff, stage, unstage, commit, log, isRepo, parseStatus,
   validRef, parseBranches, parseNumstat, numstat, branches, checkout, createBranch, fetch, pull, push, stageAll, unstageAll, merge, mergeAbort, mergeInProgress,
   remoteUrl, parseStashes, stashList, stashSave, stashApply, stashPop, stashDrop,

@@ -7,11 +7,13 @@
 <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style-features.css">
 </head>
 <body>
 <header id="titlebar">
   <div class="brand"><img src="assets/icon-64.png" alt=""><span>Hearth <b>IDE</b></span></div>
   <button id="btn-search" class="find" data-i18n-title="Search everywhere (Shift Shift, Ctrl+K)"><i data-ico="search" data-size="15"></i><span data-i18n>Search everywhere</span><kbd>Shift Shift</kbd></button>
+  <button id="btn-layout" class="find lay" data-i18n-title="Layout"><i data-ico="layout" data-size="15"></i><span data-i18n>Layout</span></button>
   <span class="gap"></span>
 </header>
 
@@ -27,7 +29,10 @@
         <ul id="attn-list" class="cards"></ul>
       </div>
       <div class="sec"><span data-i18n>Agents</span><span class="hint" id="agents-count"></span><span class="spacer"></span>
+        <span class="seg small" id="view-seg"><button data-mode="list" class="on" data-i18n-title="List"><i data-ico="inbox" data-size="13"></i></button><button data-mode="board" data-i18n-title="Board"><i data-ico="layout" data-size="13"></i></button></span>
         <button id="btn-start" class="ib" data-i18n-title="Start agent"><i data-ico="plus" data-size="17"></i></button></div>
+      <div id="board" hidden></div>
+      <div class="sec" id="ended-sec" hidden><span data-i18n>Ended</span></div>
       <ul id="session-list" class="cards"></ul>
       <div id="empty-inbox"><div data-i18n>No agents yet.</div><button id="btn-start2" class="primary"><i data-ico="sparkles" data-size="15"></i><span data-i18n>Start agent</span></button></div>
     </div>
@@ -39,12 +44,12 @@
       <div id="chat-head" hidden>
         <span class="tile" id="ch-icon"></span>
         <div><div class="ct" id="ch-title"></div><div class="cs" id="ch-sub"></div></div>
-        <span class="pill" id="ch-status"></span><span class="pill ok" id="ch-sandbox"></span>
+        <span class="hint mono" id="ch-timer"></span><span class="pill" id="ch-status"></span><span class="pill ok" id="ch-sandbox"></span>
         <button class="ib" id="ch-stop" data-i18n-title="Stop agent"><i data-ico="stop" data-size="15"></i></button>
       </div>
       <div id="login-hint" class="hint-bar" hidden><span data-i18n>Sign-in: click the link in the terminal (it opens in your browser), then paste the code here (use "Copy code" on that page) with Ctrl+V or a right-click. It is not shown while you paste; press Enter to send it.</span></div>
       <div id="terminals"></div>
-      <div id="empty" class="empty"><div class="box"><h2>Hearth <b>IDE</b></h2><p class="hint" data-i18n>Start an agent to begin.</p></div></div>
+      <div id="empty" class="empty"><div class="box"><h2>Hearth <b>IDE</b></h2><p class="hint" data-i18n>Start an agent to begin.</p><div id="welcome-recent" class="recent"></div></div></div>
     </section>
     <section id="pane-editor" class="pane" data-view="editor">
       <div id="editor-bar"><button id="btn-save" class="primary" disabled><i data-ico="save" data-size="14"></i><span data-i18n>Save (Ctrl+S)</span></button><span id="editor-status"></span></div>
@@ -69,22 +74,49 @@
           <button id="git-pr"><i data-ico="git-pr" data-size="14"></i><span data-i18n>MR / PR</span></button>
         </div>
       </div>
-      <div class="gsec"><i data-ico="chevron-down" data-size="13"></i><span data-i18n>Changes</span><span class="cnt" id="git-count2">0</span><span class="spacer"></span>
-        <button id="git-stageall" class="ghost" data-i18n>Stage all</button><button id="git-unstageall" class="ghost" data-i18n>Unstage all</button></div>
-      <div id="git-files"></div>
-      <textarea id="commit-msg" data-i18n-ph="Commit message" placeholder="Commit message"></textarea>
-      <div class="row"><button id="btn-commit" class="primary"><i data-ico="git-commit" data-size="15"></i><span data-i18n>Commit staged</span></button><button id="btn-refresh" class="ghost"><i data-ico="refresh" data-size="14"></i><span data-i18n>Refresh</span></button></div>
-      <pre id="git-diff"></pre>
-      <div class="gsec"><i data-ico="archive" data-size="14"></i><span data-i18n>Stash</span><span class="spacer"></span><button id="stash-save" class="ghost" data-i18n>Stash changes</button></div>
-      <div id="stash-list"></div>
-      <div class="gsec"><i data-ico="git-branch" data-size="14"></i><span data-i18n>Branches</span><span class="cnt" id="branch-count">0</span><span class="spacer"></span>
-        <span class="seg" id="branch-seg"><button class="on" data-scope="local" data-i18n>Local</button><button data-scope="remote" data-i18n>Remote</button></span></div>
-      <div class="row"><input id="branch-filter" data-i18n-ph="Filter" placeholder="Filter"></div>
-      <div id="branch-list" style="margin-top:8px"></div>
       <div id="merge-bar" class="row" hidden><span class="hint" data-i18n>A merge is in progress.</span><button id="merge-abort" data-i18n>Abort merge</button></div>
-      <div class="gsec"><i data-ico="clock" data-size="14"></i><span data-i18n>Recent commits</span></div>
-      <div id="git-log"></div>
+      <nav class="gtabs-bar" id="git-tabs">
+        <button data-gtab="changes" class="on"><span data-i18n>Changes</span><span class="cnt" id="git-count2">0</span></button>
+        <button data-gtab="cr"><span id="git-cr-label" data-i18n>MR / PR</span><span class="cnt" id="cr-count"></span></button>
+        <button data-gtab="branches"><span data-i18n>Branches</span><span class="cnt" id="branch-count">0</span></button>
+        <button data-gtab="history"><span data-i18n>History</span></button>
+        <button data-gtab="stashes"><span data-i18n>Stashes</span><span class="cnt" id="stash-count"></span></button>
+      </nav>
+      <div class="gsplit" id="git-split">
+        <div class="glist">
+          <div class="gpage on" data-gpage="changes">
+            <div class="gsec"><span class="spacer"></span><button id="git-stageall" class="ghost" data-i18n>Stage all</button><button id="git-unstageall" class="ghost" data-i18n>Unstage all</button></div>
+            <div id="git-files"></div>
+            <textarea id="commit-msg" data-i18n-ph="Commit message" placeholder="Commit message"></textarea>
+            <div class="row commit-row"><button id="btn-commit" class="primary"><i data-ico="git-commit" data-size="15"></i><span data-i18n>Commit staged</span></button>
+              <span class="splitbtn"><button id="btn-generate" class="ghost" data-i18n-title="Write a commit message with an agent"><i data-ico="sparkles" data-size="14"></i><span data-i18n>Generate</span></button><button id="btn-generate-menu" class="ghost ib" data-i18n-title="Choose the agent"><i data-ico="chevron-down" data-size="13"></i></button></span>
+              <span class="spacer"></span><button id="btn-refresh" class="ib" data-i18n-title="Refresh"><i data-ico="refresh" data-size="14"></i></button></div>
+          </div>
+          <div class="gpage" data-gpage="cr">
+            <div class="row gpad"><span class="seg" id="cr-seg"><button class="on" data-state="open" data-i18n>Open</button><button data-state="merged" data-i18n>Merged</button><button data-state="closed" data-i18n>Closed</button></span><span class="spacer"></span>
+              <button id="git-pr" class="ghost"><i data-ico="plus" data-size="14"></i><span data-i18n>New</span></button><button id="cr-reload" class="ib" data-i18n-title="Refresh"><i data-ico="refresh" data-size="14"></i></button></div>
+            <div id="cr-current" class="hint gpad"></div>
+            <div id="cr-list"></div>
+          </div>
+          <div class="gpage" data-gpage="branches">
+            <div class="row gpad"><span class="seg" id="branch-seg"><button class="on" data-scope="local" data-i18n>Local</button><button data-scope="remote" data-i18n>Remote</button></span><input id="branch-filter" data-i18n-ph="Filter" placeholder="Filter"></div>
+            <div id="branch-list" style="margin-top:8px"></div>
+          </div>
+          <div class="gpage" data-gpage="history"><div id="git-log"></div></div>
+          <div class="gpage" data-gpage="stashes">
+            <div class="gsec"><span class="spacer"></span><button id="stash-save" class="ghost"><i data-ico="archive" data-size="14"></i><span data-i18n>Stash changes</span></button></div>
+            <div id="stash-list"></div>
+          </div>
+        </div>
+        <div class="gdetail" id="git-detail" hidden>
+          <div class="gdhead"><button id="gd-back" class="ib" data-i18n-title="Back"><i data-ico="chevron-right" data-size="15"></i></button><b id="gd-title"></b><span class="spacer"></span><span id="gd-actions" class="row"></span></div>
+          <div id="git-diff"></div>
+        </div>
+      </div>
     </section>
+
+    <section id="insp-specs" class="pane" data-view="specs"><div id="specs-root"></div></section>
+    <section id="insp-hooks" class="pane" data-view="hooks"><div id="hooks-root"></div></section>
 
     <section id="insp-overview" class="pane" data-view="overview">
       <div class="row wrap"><select id="jr-filter" style="width:auto"><option value="all" data-i18n>All</option><option value="step" data-i18n>Steps</option><option value="decision" data-i18n>Decisions</option><option value="question" data-i18n>Open</option></select>
@@ -132,7 +164,12 @@
     <label id="row-clone" hidden><span data-i18n>Repository URL</span> <input id="start-url" placeholder="git@github.com:owner/repo.git"></label>
     <label><span id="lbl-dir" data-i18n>Folder</span> <span class="row"><input id="start-dir" readonly data-i18n-ph="Choose a project folder" placeholder="Choose a project folder"><button type="button" id="btn-pick" data-i18n>Browse...</button></span></label>
     <div id="start-recent" class="recent" hidden></div>
-    <label class="check" id="row-continue" hidden><input type="checkbox" id="start-continue"> <span data-i18n>Continue the last conversation in this folder</span></label>
+    <label id="row-session" hidden><span data-i18n>Session</span> <select id="start-session"></select></label>
+    <div class="row" id="row-model" hidden>
+      <label id="lbl-model" style="flex:1"><span data-i18n>Model</span> <select id="start-model"></select></label>
+      <label id="lbl-effort" style="flex:1"><span data-i18n>Effort</span> <select id="start-effort"></select></label>
+    </div>
+    <p class="hint" id="model-hint" data-i18n>Smaller models and less effort save many tokens on routine work.</p>
     <label class="check"><input type="checkbox" id="start-login"> <span data-i18n>Run the agent's login first</span></label>
     <p id="start-hint" class="hint"></p>
     <div class="row end"><button value="cancel" data-i18n>Cancel</button><button id="btn-go" class="primary" value="go" data-i18n>Start</button></div>
@@ -165,6 +202,7 @@
       <label class="check"><input type="checkbox" id="set-ssh"> <span data-i18n>Git over SSH (use ~/.ssh for push, pull and fetch)</span></label>
       <label><span data-i18n>Sandbox backend</span> <select id="set-backend"><option value="auto" data-i18n>Automatic (Windows AppContainer)</option><option value="wsl">WSL2 + nono</option></select></label>
       <label class="check danger"><input type="checkbox" id="set-unsandboxed"> <span data-i18n>Allow running agents WITHOUT a sandbox when no sandbox is available</span></label>
+      <div class="row"><button type="button" id="btn-restart-sessions"><i data-ico="refresh" data-size="14"></i><span data-i18n>Restart running sessions</span></button><span class="hint" data-i18n>Waiting agents now, working ones after their current turn.</span></div>
     </div>
     <div class="set-pane" id="set-creds">
       <p class="hint" data-i18n>Stored encrypted with Windows (DPAPI), never in a repository.</p>
@@ -210,8 +248,10 @@
 <script src="icons.js"></script>
 <script src="i18n.js"></script>
 <script src="i18n-de.js"></script>
+<script src="i18n-de-features.js"></script>
 <script src="themes.js"></script>
 <script src="term-keys.js"></script>
+<script src="diff.js"></script>
 <script src="layout-model.js"></script>
 <script src="layout.js"></script>
 <script src="editor-lang.js"></script>
@@ -224,5 +264,7 @@
 <script src="view-ci.js"></script>
 <script src="view-arch.js"></script>
 <script src="view-settings.js"></script>
+<script src="view-specs.js"></script>
+<script src="view-hooks.js"></script>
 </body>
 </html>

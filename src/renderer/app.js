@@ -35,7 +35,7 @@ const ago = (ts) => {
 const plainLine = (data) => data.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
 
 const state = { sessions: new Map(), terms: new Map(), selected: null, env: null, settings: null, editor: null, docs: new Map(), active: null, zoom: 0 };
-const STATUS = { starting: 'Starting', running: 'Running', 'needs-input': 'Needs input', idle: 'Idle', done: 'Done', failed: 'Failed' };
+const STATUS = { starting: 'Starting', running: 'Running', 'needs-input': 'Needs input', blocked: 'Error', idle: 'Idle', done: 'Done', failed: 'Failed' };
 
 // ---------- tabs ----------
 function bindTabs(navSel, panePrefix, onSwitch) {
@@ -54,25 +54,77 @@ state.paneZoom = {};
 document.addEventListener("hearth:zoom", (e) => { const { view, step } = e.detail; if (state.paneZoom[view] === step) return; state.paneZoom[view] = step; if (view === "agent" || view === "editor") applyZoom(); });
 
 // ---------- inbox ----------
-const PILL = { starting: ['', 'Starting'], running: ['run', 'Running'], 'needs-input': ['warn', 'Needs input'], idle: ['', 'Idle'], done: ['ok', 'Done'], failed: ['bad', 'Failed'] };
+const PILL = { starting: ['', 'Starting'], running: ['run', 'Running'], 'needs-input': ['warn', 'Needs input'], blocked: ['bad', 'Error'], idle: ['', 'Idle'], done: ['ok', 'Done'], failed: ['bad', 'Failed'] };
 /** A session "needs attention" when it asks something, failed, or finished and has not been looked at yet. */
-const needsAttention = (s) => s.status === 'needs-input' || s.status === 'failed' || (s.status === 'done' && !s.seen);
+const needsAttention = (s) => s.status === 'needs-input' || s.status === 'failed' || s.status === 'blocked' || (s.status === 'done' && !s.seen);
 
-function sessionCard(s) {
+/** "3:07" or "1:02:03" */
+const fmtDur = (ms) => { const n = Math.max(0, Math.floor(ms / 1000)); const h = Math.floor(n / 3600); const m = Math.floor(n / 60) % 60; const x = n % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
+/** How long the agent has been working / waiting / how long its last turn took. */
+function timerText(s) {
+  const c = s.info?.clock; if (!c) return '';
+  const now = Date.now();
+  if (s.status === 'running' && c.turnStarted) return t('working for {t}', { t: fmtDur(now - c.turnStarted) });
+  if (s.status === 'needs-input') return t('waiting for you {t}', { t: fmtDur(now - c.since) });
+  if (c.lastTurn != null && ['done', 'idle', 'blocked'].includes(s.status)) return t('done after {t}', { t: fmtDur(c.lastTurn) });
+  return '';
+}
+function updateTimers() {
+  for (const n of document.querySelectorAll('[data-timer]')) { const s = state.sessions.get(n.dataset.timer); const v = s ? timerText(s) : ''; if (n.textContent !== v) n.textContent = v; }
+}
+setInterval(updateTimers, 1000);
+
+function sessionCard(s, board = false) {
   const [cls, label] = PILL[s.status] || ['', s.status];
-  const summary = s.last || '';
-  const card = el('li', { class: `card ${s.id === state.selected ? 'sel' : ''} ${needsAttention(s) ? 'attn' : ''}` },
+  const detail = s.info?.detail ? t(s.info.detail) : '';
+  const summary = detail || s.last || '';
+  const progress = s.info?.progress;
+  const card = el('li', { class: `card ${board ? 'bc' : ''} ${s.id === state.selected ? 'sel' : ''} ${needsAttention(s) ? 'attn' : ''}`, 'data-id': s.id },
     el('span', { class: 'tile' }),
     el('div', { style: 'min-width:0' },
       el('div', { class: 'ttl' }, el('span', { class: 't' }, s.title), el('span', { class: `pill ${cls}` }, t(label))),
-      el('div', { class: 's' }, `${s.name} · ${s.directory}`),
+      el('div', { class: 's' }, board ? s.name : `${s.name} · ${s.directory}`),
       summary ? el('div', { class: 'sum' }, summary) : '',
-      el('div', { class: 's' }, `${s.sandboxed ? t('sandbox') : t('NO SANDBOX')} · ${ago(s.lastActivity || s.started)}`)));
+      progress != null ? el('div', { class: 'prog', title: `${progress} %` }, el('span', { style: `width:${progress}%` })) : '',
+      el('div', { class: 's meta' }, el('span', { class: 'tmr', 'data-timer': s.id }),
+        `${s.sandboxed ? t('sandbox') : t('NO SANDBOX')} · ${ago(s.lastActivity || s.started)}`, s.restartPending ? ` · ${t('restart pending')}` : '')));
   card.firstChild.innerHTML = Icons.html(Icons.agent(s.kind), 16);
   card.addEventListener('click', () => select(s.id));
-  card.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(t('Close "{name}"?', { name: `${s.name} - ${s.title}` }))) closeSession(s.id); });
+  card.addEventListener('contextmenu', (e) => { e.preventDefault(); sessionMenu(card, s); });
   return card;
 }
+function sessionMenu(anchor, s) {
+  const items = [
+    { label: t('Rename...'), icon: 'file-text', run: () => { const v = prompt(t('Name of the session'), s.title); if (v && v.trim()) window.hearth.rename(s.id, v.trim()); } },
+    { label: t('Stop agent'), icon: 'stop', disabled: s.status === 'done' || s.status === 'failed', run: () => window.hearth.stop(s.id) },
+    '-', { label: t('Close session'), icon: 'x', run: () => { if (confirm(t('Close "{name}"?', { name: `${s.name} - ${s.title}` }))) closeSession(s.id); } }];
+  Layout.menu(anchor, items);
+}
+
+// ---------- list or board ----------
+state.board = (() => { try { return localStorage.getItem('hearth.board') === '1'; } catch { return false; } })();
+const BOARD_COLS = [['needs', 'Needs you', (s) => s.status === 'needs-input' || s.status === 'blocked' || s.status === 'failed'],
+  ['working', 'Working', (s) => s.status === 'running' || s.status === 'starting'], ['done', 'Done', (s) => s.status === 'done'], ['idle', 'Idle', (s) => s.status === 'idle']];
+function setBoard(on) {
+  state.board = on; try { localStorage.setItem('hearth.board', on ? '1' : '0'); } catch { /* private mode */ }
+  document.querySelectorAll('#view-seg button').forEach((b) => b.classList.toggle('on', (b.dataset.mode === 'board') === on));
+  renderInbox();
+}
+document.querySelectorAll('#view-seg button').forEach((b) => b.addEventListener('click', () => setBoard(b.dataset.mode === 'board')));
+function renderBoard(list) {
+  const box = $('#board');
+  const live = list.filter((s) => !(s.status === 'done' && s.exited) && s.status !== 'failed' || needsAttention(s));
+  const wide = $('#view-sessions').clientWidth > 620;
+  box.classList.toggle('wide', wide);
+  const cols = BOARD_COLS.map(([key, title, test]) => [key, title, live.filter(test)]).filter(([, , items]) => wide || items.length);
+  swapIfChanged(box, cols.map(([key, title, items]) => el('div', { class: `bcol ${key}` },
+    el('div', { class: 'sec' }, el('span', {}, t(title)), el('span', { class: 'cnt' }, String(items.length))),
+    el('ul', { class: 'cards' }, ...items.map((s) => sessionCard(s, true))))));
+  const ended = list.filter((s) => (s.exited || s.status === 'failed') && !needsAttention(s));
+  swapIfChanged($('#session-list'), ended.map((s) => sessionCard(s)));
+  $('#ended-sec').hidden = !ended.length;
+}
+new ResizeObserver(() => requestAnimationFrame(() => { if (state.board) renderInbox(); })).observe($('#view-sessions'));
 
 /** Replace a list's cards only when their content changed: a status line that says the same must not make the list flash. */
 function swapIfChanged(listEl, nodes) {
@@ -89,11 +141,16 @@ function renderInbox() {
   const list = [...state.sessions.values()].sort((a, b) => b.started - a.started);
   const attn = list.filter(needsAttention);
   const rest = list.filter((s) => !needsAttention(s));
-  $('#attn-wrap').hidden = attn.length === 0;
-  $('#attn-count').textContent = String(attn.length);
-  $('#attn-sub').textContent = t('{n} sessions with activity, results, questions or errors.', { n: attn.length });
-  swapIfChanged($('#attn-list'), attn.map(sessionCard));
-  swapIfChanged($('#session-list'), rest.map(sessionCard));
+  $('#board').hidden = !state.board;
+  if (state.board) { $('#attn-wrap').hidden = true; renderBoard(list); } else {
+    $('#ended-sec').hidden = true;
+    $('#attn-wrap').hidden = attn.length === 0;
+    $('#attn-count').textContent = String(attn.length);
+    $('#attn-sub').textContent = t('{n} sessions with activity, results, questions or errors.', { n: attn.length });
+    swapIfChanged($('#attn-list'), attn.map((s) => sessionCard(s)));
+    swapIfChanged($('#session-list'), rest.map((s) => sessionCard(s)));
+  }
+  updateTimers();
   const active = list.filter((s) => s.status === 'running' || s.status === 'starting').length;
   $('#agents-count').textContent = list.length ? `(${t('{n} active', { n: active })})` : '';
   $('#empty-inbox').hidden = list.length > 0;
@@ -112,7 +169,8 @@ function renderChatHead() {
   $('#ch-icon').innerHTML = Icons.html(Icons.agent(s.kind), 17);
   $('#ch-title').textContent = s.title;
   $('#ch-sub').textContent = `${s.name} · ${s.directory}`;
-  const st = $('#ch-status'); st.className = `pill ${cls}`; st.textContent = t(label);
+  const st = $('#ch-status'); st.className = `pill ${cls}`; st.textContent = t(label); st.title = s.info?.detail ? t(s.info.detail) : '';
+  $('#ch-timer').dataset.timer = s.id;
   const sb = $('#ch-sandbox'); sb.className = `pill ${s.sandboxed ? 'ok' : 'raw'}`; sb.innerHTML = Icons.html('shield', 12) + (s.sandboxed ? t('sandbox') : t('NO SANDBOX'));
   $('#ch-stop').disabled = s.status === 'done' || s.status === 'failed';
   $('#login-hint').hidden = !(s.login && s.status !== 'done' && s.status !== 'failed');
@@ -125,6 +183,7 @@ function select(id) {
   state.selected = id;
   for (const [tid, term] of state.terms) term.host.classList.toggle('active', tid === id);
   const s = cur();
+  window.hearth.selected(id);
   if (s) { s.seen = true; loadTree(s.directory); }
   renderInbox();
   fitCurrent();
@@ -223,24 +282,64 @@ window.hearth.onData(({ id, data }) => {
   const line = plainLine(data).split(/\r?\n|\r/).map((l) => l.trim()).filter((l) => l.length > 2 && /[\p{L}\p{N}]/u.test(l) && !/^(PS )?[A-Za-z]:\\[^>]*>\s*$/.test(l) && !/^[$>%#]\s*$/.test(l)).pop();
   if (line) { s.last = line.slice(0, 140); renderInboxSoon(); }
 });
-window.hearth.onStatus(({ id, status }) => { const s = state.sessions.get(id); if (s) { s.status = status; if (id === state.selected && status === 'done') s.seen = true; renderInbox(); notify(s); } });
-window.hearth.onExit(({ id, code }) => {
-  const s = state.sessions.get(id);
-  state.terms.get(id)?.term.write(`\r\n\x1b[2m[${t('process exited with code {code}', { code })}]\x1b[0m\r\n`);
-  if (s) { s.status = code === 0 ? 'done' : 'failed'; if (id === state.selected && code === 0) s.seen = true; renderInbox(); }
+window.hearth.onStatus(({ id, status, info }) => {
+  const s = state.sessions.get(id); if (!s) return;
+  const was = s.status; s.status = status; s.info = info;
+  if (status !== 'done') s.exited = false;
+  if (id === state.selected && status === 'done' && document.hasFocus() && Layout.isActive('agent')) s.seen = true;
+  else if (status === 'done' && was !== 'done') s.seen = false;
+  renderInbox(); notify(s, was); fire('hearth:status', s);
 });
-function notify(s) {
-  if (s.status !== 'needs-input' || document.hasFocus() || !('Notification' in window)) return;
-  const fireIt = () => new Notification(t('{name} needs you', { name: s.name }), { body: s.title });
+window.hearth.onInfo((p) => { const s = state.sessions.get(p.id); if (!s) return; Object.assign(s, { title: p.title, info: p.info, restartPending: p.restartPending, sessionID: p.sessionID, sandboxed: p.sandboxed }); s.status = p.status; renderInbox(); });
+window.hearth.onExit(({ id, code, error }) => {
+  const s = state.sessions.get(id);
+  state.terms.get(id)?.term.write(`\r\n\x1b[2m[${t('process exited with code {code}', { code })}${error ? ': ' + error : ''}]\x1b[0m\r\n`);
+  if (s) { s.status = code === 0 ? 'done' : 'failed'; s.exited = true; if (id === state.selected && code === 0) s.seen = true; renderInbox(); fire('hearth:status', s); }
+});
+/** Types a prompt into the agent of the selected (or given) session and submits it. */
+async function sendToAgent(text, id = state.selected) {
+  const s = state.sessions.get(id);
+  if (!s || s.exited) { alert(t('Start an agent first: the request goes to the agent of the selected session.')); return false; }
+  try { await window.hearth.prompt(id, text); showCenter('agent'); return true; } catch (err) { alert(errMsg(err)); return false; }
+}
+window.sendToAgent = sendToAgent;
+function notify(s, was) {
+  const attention = ['needs-input', 'done', 'blocked'].includes(s.status) && was !== s.status && !s.login;
+  if (!attention || document.hasFocus() || !('Notification' in window)) return;
+  const title = s.status === 'needs-input' ? t('{name} needs you', { name: s.name }) : s.status === 'done' ? t('{name} is done', { name: s.name }) : t('{name} reports an error', { name: s.name });
+  const fireIt = () => { const n = new Notification(title, { body: s.info?.detail ? `${s.title}: ${t(s.info.detail)}` : s.title }); n.onclick = () => { window.focus(); select(s.id); showCenter('agent'); }; };
   if (Notification.permission === 'granted') fireIt(); else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => p === 'granted' && fireIt());
 }
+
+// ---------- welcome screen: recent folders (click: continue the last conversation, +: new session) ----------
+async function drawWelcome() {
+  const box = $('#welcome-recent'); if (!box) return;
+  const items = (await window.hearth.history.list().catch(() => [])).slice(0, 6);
+  const agents = await window.hearth.agents();
+  const name = (k) => agents.find((a) => a.id === k)?.name || k;
+  const go = async (x, mode) => {
+    const resume = mode === 'continue' ? (await window.hearth.history.sessions(x.kind, x.directory).catch(() => []))[0] : null;
+    const options = await window.hearth.history.options(x.directory).catch(() => ({}));
+    try {
+      const s = await window.hearth.start({ kind: x.kind, directory: x.directory, resumeID: resume?.sessionID, continueLast: mode === 'continue' && !resume && Boolean(AGENT_CONTINUE[x.kind]), options });
+      state.sessions.set(s.id, s); attachTerminal(s); select(s.id); showCenter('agent');
+    } catch (err) { alert(errMsg(err)); }
+  };
+  box.replaceChildren(...(items.length ? [el('div', { class: 'hint' }, t('Recent sessions'))] : []), ...items.map((x) => {
+    const row = el('div', { class: 'recent-row', title: t('Continue the last conversation in this folder') + '\n' + x.directory }, el('span', { class: 'rn' }, x.title), el('small', { class: 'hint' }, name(x.kind)));
+    row.addEventListener('click', () => go(x, AGENT_CONTINUE[x.kind] ? 'continue' : 'new'));
+    const plus = el('button', { type: 'button', class: 'ib', title: t('New session') }); plus.innerHTML = Icons.html('plus', 13);
+    plus.addEventListener('click', (e) => { e.stopPropagation(); go(x, 'new'); });
+    row.append(plus); return row;
+  }));
+}
+document.addEventListener('hearth:lang', drawWelcome);
 
 // ---------- start dialog ----------
 async function openStart() {
   const sel = $('#start-kind');
   if (!sel.options.length) for (const a of await window.hearth.agents()) sel.append(el('option', { value: a.id }, a.name));
   $('#start-login').parentElement.hidden = false;
-  $('#start-continue').checked = false;
   await drawRecent();
   updateHint();
   $('#dlg-start').showModal();
@@ -252,7 +351,7 @@ async function drawRecent() {
   box.hidden = !items.length;
   box.replaceChildren(...(items.length ? [el('div', { class: 'hint' }, t('Recent sessions'))] : []), ...items.map((x) => {
     const row = el('div', { class: 'recent-row', title: x.directory }, el('span', { class: 'rn' }, x.title), el('small', { class: 'hint' }, `${names[x.kind] || x.kind} - ${new Date(x.last).toLocaleDateString(I18n.lang === 'de' ? 'de-DE' : 'en-GB')}`));
-    row.addEventListener('click', () => { $('#start-kind').value = x.kind; $('#start-source').value = 'folder'; $('#start-dir').value = x.directory; updateHint(); $('#start-continue').checked = Boolean(AGENT_CONTINUE[x.kind]); });
+    row.addEventListener('click', async () => { $('#start-kind').value = x.kind; $('#start-source').value = 'folder'; $('#start-dir').value = x.directory; await updateHint(); const sel = $('#start-session'); if (sel.options.length > 1) sel.selectedIndex = 1; });
     const del = el('button', { type: 'button', class: 'ib x', title: t('Remove from list') }); del.innerHTML = Icons.html('x', 12);
     del.addEventListener('click', async (e) => { e.stopPropagation(); await window.hearth.history.forget(x.kind, x.directory); drawRecent(); });
     row.append(del); return row;
@@ -260,11 +359,32 @@ async function drawRecent() {
 }
 const AGENT_CONTINUE = { claude: true, codex: true };
 
+/** "New session", "Continue the last conversation" and the conversations Hearth knows for this agent and folder. */
+async function drawSessionChoice() {
+  const kind = $('#start-kind').value; const dir = $('#start-dir').value; const sel = $('#start-session');
+  const known = dir && $('#start-source').value === 'folder' ? await window.hearth.history.sessions(kind, dir).catch(() => []) : [];
+  const opts = [el('option', { value: 'new' }, t('New session'))];
+  if (AGENT_CONTINUE[kind] && dir) opts.push(el('option', { value: 'continue' }, t('Continue the last conversation in this folder')));
+  for (const x of known) opts.push(el('option', { value: 'id:' + x.sessionID }, `${x.title} - ${new Date(x.last).toLocaleString(I18n.lang === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}`));
+  sel.replaceChildren(...opts);
+  $('#row-session').hidden = opts.length < 2;
+}
+/** Model and reasoning effort (Claude Code: model + effort, Codex: effort); the last choice per folder is preselected. */
+async function drawModelChoice() {
+  const kind = $('#start-kind').value; const a = (await window.hearth.agents()).find((x) => x.id === kind) || {};
+  const last = $('#start-dir').value ? await window.hearth.history.options($('#start-dir').value).catch(() => ({})) : {};
+  const fill = (sel, values, chosen, labels = {}) => { sel.replaceChildren(el('option', { value: '' }, t('Default')), ...values.map((v) => el('option', { value: v }, labels[v] || v))); sel.value = values.includes(chosen) ? chosen : ''; };
+  fill($('#start-model'), a.models || [], last.model, { sonnet: 'Sonnet', haiku: 'Haiku', opus: 'Opus', fable: 'Fable' });
+  fill($('#start-effort'), a.efforts || [], last.effort);
+  $('#lbl-model').hidden = !(a.models || []).length; $('#lbl-effort').hidden = !(a.efforts || []).length;
+  $('#row-model').hidden = !(a.models || []).length && !(a.efforts || []).length;
+}
+
 async function updateHint() {
   const agents = await window.hearth.agents();
   const a = agents.find((x) => x.id === $('#start-kind').value);
   $('#start-login').parentElement.hidden = !(a && a.login);
-  $('#row-continue').hidden = !AGENT_CONTINUE[$('#start-kind').value];
+  await Promise.all([drawSessionChoice(), drawModelChoice()]);
   let hint = a && a.install ? t('Install: {cmd} (the sandbox reads it from your PATH)', { cmd: a.install }) : '';
   if (state.env && !state.env.backend) hint += (hint ? '\n' : '') + state.env.reason;
   $('#start-hint').textContent = hint;
@@ -275,13 +395,16 @@ async function updateHint() {
 $('#start-kind').addEventListener('change', updateHint);
 $('#start-source').addEventListener('change', updateHint);
 $('#btn-start').addEventListener('click', openStart);
-$('#btn-pick').addEventListener('click', async () => { const d = await window.hearth.pickFolder(); if (d) $('#start-dir').value = d; });
+$('#btn-pick').addEventListener('click', async () => { const d = await window.hearth.pickFolder(); if (d) { $('#start-dir').value = d; updateHint(); } });
 $('#btn-go').addEventListener('click', async (e) => {
   const kind = $('#start-kind').value; const directory = $('#start-dir').value;
   const clone = $('#start-source').value === 'clone';
   if (!directory || (clone && !$('#start-url').value.trim())) { e.preventDefault(); return; }
+  const choice = $('#row-session').hidden ? 'new' : $('#start-session').value;
+  const login = $('#start-login').checked;
   try {
-    const s = await window.hearth.start({ kind, directory, login: $('#start-login').checked, continueLast: $('#start-continue').checked && !$('#start-login').checked && !!AGENT_CONTINUE[kind], cloneUrl: clone ? $('#start-url').value.trim() : undefined });
+    const s = await window.hearth.start({ kind, directory, login, continueLast: choice === 'continue' && !login, resumeID: choice.startsWith('id:') && !login ? choice.slice(3) : undefined,
+      options: { model: $('#start-model').value || null, effort: $('#start-effort').value || null }, cloneUrl: clone ? $('#start-url').value.trim() : undefined });
     state.sessions.set(s.id, s);
     attachTerminal(s);
     select(s.id);
@@ -446,5 +569,6 @@ document.addEventListener('hearth:lang', () => { renderInbox(); if (state.env) s
   I18n.set(state.settings.language);
   await showSandboxState();
   renderInbox();
+  drawWelcome();
   fire('hearth:ready');
 })();

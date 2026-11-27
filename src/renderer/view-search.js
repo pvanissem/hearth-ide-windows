@@ -16,7 +16,16 @@
       [t('Git: fetch'), () => { showInspector('git'); $('#git-fetch').click(); }], [t('Git: pull'), () => { showInspector('git'); $('#git-pull').click(); }],
       [t('Git: push'), () => { showInspector('git'); $('#git-push').click(); }], [t('Run tests'), () => { showInspector('tests'); $('#tests-run').click(); }],
       [t('Check for updates'), () => { $('#btn-settings').click(); document.querySelector('#set-tabs [data-tab="about"]').click(); $('#btn-update').click(); }],
+      [t('Show specs'), goTab('specs')], [t('Show agent hooks'), goTab('hooks')], [t('New spec...'), () => { showInspector('specs'); window.SpecsView?.newSpec(); }],
+      [t('New agent hook...'), () => { showInspector('hooks'); window.HooksView?.newHook(); }],
+      [t('Git: generate commit message'), () => { showInspector('git'); window.GitView?.setTab('changes'); $('#btn-generate').click(); }],
+      [t('Git: merge / pull requests'), () => { showInspector('git'); window.GitView?.setTab('cr'); }],
+      [t('Sessions: board'), () => { showInspector('sessions'); $('#view-seg [data-mode="board"]').click(); }], [t('Sessions: list'), () => { showInspector('sessions'); $('#view-seg [data-mode="list"]').click(); }],
+      [t('Restart running sessions'), () => window.restartSessions?.()],
+      [`${t('Layout')}: ${t('Standard')}`, () => Layout.preset('standard')], [`${t('Layout')}: ${t('Spec-driven')}`, () => Layout.preset('spec')],
+      [t('Save current layout...'), () => Layout.openMenu($('#btn-layout'))],
     ];
+    for (const name of Layout.saved()) a.push([`${t('Layout')}: ${name}`, () => Layout.restore(name)]);
     for (const [id, name] of Themes.list) a.push([`${t('Theme')}: ${name}`, async () => { Themes.apply(id); state.settings = await window.hearth.setSettings({ ...state.settings, theme: id }); }]);
     a.push([`${t('Language')}: Deutsch`, async () => { I18n.set('de'); state.settings = await window.hearth.setSettings({ ...state.settings, language: 'de' }); renderInbox(); }]);
     a.push([`${t('Language')}: English`, async () => { I18n.set('en'); state.settings = await window.hearth.setSettings({ ...state.settings, language: 'en' }); renderInbox(); }]);

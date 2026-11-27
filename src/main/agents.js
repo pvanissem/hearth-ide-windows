@@ -40,4 +40,38 @@ const AGENTS = {
   },
 };
 
-module.exports = { AGENTS };
+AGENTS.claude.statusSource = 'hooks';
+AGENTS.codex.statusSource = 'notify';
+AGENTS.claude.models = ['sonnet', 'haiku', 'opus', 'fable'];
+AGENTS.claude.efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
+AGENTS.codex.efforts = ['low', 'medium', 'high'];
+
+/** Arguments for the chosen model and effort. Unknown values are dropped (they come back from the stored history). */
+function optionArgs(kind, { model, effort } = {}) {
+  const a = AGENTS[kind] || {};
+  const m = (a.models || []).includes(model) ? model : null;
+  const e = (a.efforts || []).includes(effort) ? effort : null;
+  if (kind === 'claude') return [...(m ? ['--model', m] : []), ...(e ? ['--effort', e] : [])];
+  if (kind === 'codex' && e) return ['-c', `model_reasoning_effort="${e}"`];
+  return [];
+}
+
+/** Claude Code hooks (via --settings) / Codex notify that report the status to <run>/events.jsonl through the helper. */
+const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop', 'SessionEnd'];
+function statusHookArgs(kind, helperInBin, runDir) {
+  const exe = helperInBin.replace(/\\/g, '/');
+  if (kind === 'claude') {
+    // Exec form (command + args): no shell. Claude would otherwise run hooks through Git Bash, which cannot start
+    // inside an AppContainer; the helper is a real .exe.
+    const hooks = Object.fromEntries(CLAUDE_EVENTS.map((e) => [e, [{ hooks: [{ type: 'command', command: exe, args: ['event'], timeout: 5 }] }]]));
+    // Inline JSON: inside the AppContainer Claude cannot vet the parent folders of a settings file and refuses to read it.
+    // (The run folder still gets a copy, for looking at it.) The JSON has no cmd.exe metacharacters (& | < > ^ %).
+    const json = JSON.stringify({ hooks });
+    try { require('node:fs').writeFileSync(require('node:path').join(runDir, 'claude-settings.json'), json); } catch { /* only informative */ }
+    return ['--settings', json];
+  }
+  if (kind === 'codex') return ['-c', `notify=${JSON.stringify([exe, 'event'])}`];
+  return [];
+}
+
+module.exports = { AGENTS, optionArgs, statusHookArgs, CLAUDE_EVENTS };

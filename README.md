@@ -6,12 +6,16 @@ so this is a separate Electron client with the same ideas: every agent runs in a
 what each of them needs, and next to the terminal you get files, Git, an overview of the agent's work, tests,
 architecture, build tasks and CI/CD.
 
-## Features (v0.2, compared with macOS v0.8.0)
+## Features (v0.3, compared with macOS v0.16.0)
 
 | Area | macOS | Windows |
 |---|---|---|
 | Agents: Claude Code, Codex, Copilot CLI, OpenCode, Gemini, sandbox shell; resume/login arguments | yes | yes |
-| Inbox with status (running / needs input / idle / done), desktop notification | hooks, notify | terminal heuristics + bell |
+| Inbox with status (running / needs input / error / idle / done), desktop notification | hooks, notify | Claude Code hooks and Codex `notify` (through the sandbox helper), else terminal heuristics + bell |
+| **Program Status Protocol** (OSC 7501): any program in the terminal reports working/blocked/done/idle/error, progress and a message | yes | yes |
+| **Board** (Needs you / Working / Done / Idle) next to the list, **turn timers** (working for, waiting for you, done after) | yes | yes |
+| Start dialog: **model and effort** (Claude Code, Codex; remembered per folder), **choose a session** to resume (ids reported by the agent), welcome screen with recent folders | yes | yes |
+| **Restart running sessions** after rule changes: waiting agents now, working ones after their turn | yes | yes |
 | Terminal in the chat area | SwiftTerm | xterm.js + ConPTY, Ctrl +/- zoom |
 | **Sandbox** | nono + Seatbelt | native Windows AppContainer, nothing to install (see below) |
 | Start from an existing folder or **clone a repository** | yes | yes |
@@ -19,7 +23,13 @@ architecture, build tasks and CI/CD.
 | **Find usages** (Alt+F7, with enclosing class/function, filters), go to definition (F12, Ctrl+click) | yes | yes (word match, no compiler, like macOS) |
 | **Search Everywhere** (Shift Shift / Ctrl+K): files, symbols, text, chats, sessions, tests, actions; word-start matching ("mlv" finds MainLayoutView) | yes | yes |
 | **Git**: status, diff, stage/unstage (single or all), commit, branches, checkout, new branch, fetch, pull (ff-only), push (never forced), merge + abort, stash (save/apply/pop/drop), history | yes | yes (host Git, hooks disabled) |
-| **MR / PR** creation (GitLab / GitHub) | yes | yes |
+| **Git pane**: tabs (Changes, MR/PR, Branches, History, Stashes), wide layout with details side by side (diff with line numbers, commits, stashes, branch history) | yes | yes |
+| **Commit message by an agent** (Claude Code with Haiku, Codex, Gemini CLI; one-shot in its sandbox, no tools) | yes | yes |
+| **MR / PR**: create, list, review (description, mergeability, approvals, conversation, all files), comment on lines, reply, approve / request changes, merge (merge, squash, rebase; only the reviewed head) | yes | yes |
+| **Specs** (like Kiro): requirements (EARS) → design → tasks → implementation, approvals, guided or free mode, quality check, coverage, new-spec wizard (feature, bugfix, refactoring), steering documents, Kiro specs | yes | yes |
+| **Agent Hooks** (like Kiro): file saved/created/deleted or turn end → prompt to the agent or command in the sandbox; Kiro format, content-hash approval, no loops | yes | yes (`fs.watch`) |
+| **Layouts**: Standard, Spec-driven, save/restore own layouts (also in Search Everywhere) | yes | yes |
+| Files: copy / cut / paste, also **to and from Explorer** | Finder | Explorer |
 | **Overview** (journal): tree of steps, decisions with reasons and rejected options, open questions, revoke with reason | yes | yes (`hearth-journal` inside the sandbox) |
 | **Tests**: JUnit reports (Maven, Gradle, jest-junit, pytest, ...), run the test task | yes | yes |
 | **Architecture**: Mermaid diagrams from Markdown / `.mmd` | yes | yes |
@@ -31,17 +41,16 @@ architecture, build tasks and CI/CD.
 | Credentials: CI tokens (read/write) and environment variables for agents, encrypted with DPAPI | Keychain, nono proxy | DPAPI; variables are visible to the agent |
 | Update check | yes | checks GitHub releases (no auto-install) |
 
-**Panes.** Every view (Sessions, Agent, Editor, Files, Git, Overview, Tests, Architecture, Build, CI/CD) lives in a pane that holds
+**Panes.** Every view (Sessions, Agent, Editor, Files, Git, Overview, Tests, Architecture, Build, CI/CD, Specs, Agent Hooks) lives in a pane that holds
 tabs. Drag a tab into another pane, or onto a pane's edge to cut a new column or row (a flame preview shows where it lands).
 Each pane has text size ("AA"), split right/down, maximise (Esc restores) and close; narrow panes fold these into a "..." menu.
 Dividers are draggable (double-click evens them out), closed views come back through "+" , the pane chooser, Search Everywhere
-or "Reset layout". The layout is saved and restored.
+or "Reset layout". The layout is saved and restored; the Layout menu in the title bar switches to the spec-driven layout and saves your own.
 
 **Not (yet) in the Windows version**
 
 - Extra windows: a pane cannot be torn off into its own window yet (everything lives in one window).
 - Per-host network domain allowlist and credential *proxy* (placeholder tokens) - see the sandbox limits below.
-- Status through agent hooks (`Notification`/`Stop`) and Codex `notify`: the inbox uses terminal activity and the bell instead.
 - Usage/limit displays per agent, iTerm2/Terminal.app integration, auto-install of updates, code signing.
 - Git runs on the host (hooks and fsmonitor disabled), not in a separate sandbox.
 
@@ -84,6 +93,7 @@ npm install
 npm start               # builds the sandbox helper if needed, runs the app
 npm test                # unit tests: paths, policy, sandbox rules, leases, journal, CI, credentials, build, tests, search, Git, translations
 npm run smoke           # drives the real app: sandboxed PTY, escape attempts, every inspector view, themes, German UI
+powershell -File scripts/smoke-features.ps1   # board, OSC 7501, hooks firing, specs, Git details, layouts, Explorer clipboard, restart
 npm run dist            # NSIS installer in dist/ (bundles hearth-sandbox.exe)
 npx electron-builder --win --dir && powershell -File scripts/smoke.ps1 -Packaged     # test the packaged app
 node scripts/sandbox-run.js claude <folder>             # run an agent in the sandbox without the UI

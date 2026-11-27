@@ -7,7 +7,7 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.LayoutModel = factory();
 }(typeof self !== 'undefined' ? self : this, () => {
-  const VIEWS = ['sessions', 'agent', 'editor', 'files', 'git', 'overview', 'tests', 'arch', 'build', 'ci'];
+  const VIEWS = ['sessions', 'agent', 'editor', 'files', 'git', 'overview', 'tests', 'arch', 'build', 'ci', 'specs', 'hooks'];
   const MIN = 0.05;
   const ZONES = ['center', 'left', 'right', 'top', 'bottom'];
   let seq = 0;
@@ -21,9 +21,19 @@
     return split('row', [
       group(['sessions']),
       group(['agent', 'editor']),
-      group(['files', 'git', 'overview', 'tests', 'arch', 'build', 'ci']),
+      group(['files', 'git', 'overview', 'tests', 'arch', 'build', 'ci', 'specs', 'hooks']),
     ], [0.16, 0.5, 0.34]);
   }
+
+  /** Spec-driven: sessions, the chat, and specs (with agent hooks) above Git and the files. */
+  function specLayout() {
+    return split('row', [
+      group(['sessions']),
+      group(['agent', 'editor']),
+      split('col', [group(['specs', 'hooks']), group(['git', 'files', 'overview', 'tests', 'arch', 'build', 'ci'])], [0.6, 0.4]),
+    ], [0.16, 0.44, 0.4]);
+  }
+  const PRESETS = { standard: defaultLayout, spec: specLayout };
 
   function walk(node, fn, parent = null) {
     fn(node, parent);
@@ -91,7 +101,7 @@
     if (!g) {
       g = (groupId && findById(t, groupId)) || null;
       if (!g || g.type !== 'group') {
-        const friends = { files: 'git', git: 'files', overview: 'git', tests: 'git', arch: 'git', build: 'git', ci: 'git', editor: 'agent', agent: 'editor', sessions: 'agent' };
+        const friends = { files: 'git', git: 'files', overview: 'git', tests: 'git', arch: 'git', build: 'git', ci: 'git', specs: 'git', hooks: 'specs', editor: 'agent', agent: 'editor', sessions: 'agent' };
         g = groupOf(t, friends[view]) || groups(t)[0];
       }
       g.views.push(view); delete g.keep;
@@ -203,5 +213,5 @@
     return fixed ? normalize(fixed) : null;
   }
 
-  return { VIEWS, ZONES, defaultLayout, normalize, hideView, showView, moveView, splitGroup, closeGroup, resize, setZoom, sanitize, groups, findById, groupOf, parentOf, hiddenViews, clone };
+  return { VIEWS, ZONES, PRESETS, specLayout, defaultLayout, normalize, hideView, showView, moveView, splitGroup, closeGroup, resize, setZoom, sanitize, groups, findById, groupOf, parentOf, hiddenViews, clone };
 }));

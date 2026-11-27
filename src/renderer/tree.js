@@ -121,8 +121,25 @@ async function transfer(paths, destDir, cut) {
   await reloadDirs(touched, destDir);
   FT.sel = new Set(done); repaint();
 }
-const copySelection = (cut) => { const paths = [...FT.sel]; if (!paths.length) return; FT.clip = { paths, cut }; repaint(); toast(t(cut ? '{n} item(s) cut' : '{n} item(s) copied', { n: paths.length })); };
-async function pasteInto(dir) { if (!FT.clip) return; const c = FT.clip; await transfer(c.paths, dir, c.cut); }
+// The Windows clipboard gets the files too, so they can be pasted in Explorer; files copied in Explorer paste here.
+const copySelection = (cut) => {
+  const paths = [...FT.sel]; if (!paths.length) return;
+  const clip = { paths, cut, synced: false };
+  FT.clip = clip; repaint(); toast(t(cut ? '{n} item(s) cut' : '{n} item(s) copied', { n: paths.length }));
+  clip.writing = window.hearth.files.clipCopy(paths).then(() => { clip.synced = true; }, () => { /* Explorer interop is a bonus */ });
+};
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.some((y) => y.toLowerCase() === x.toLowerCase()));
+async function pasteInto(dir) {
+  const own = FT.clip;
+  if (own?.writing) await own.writing;              // our own clipboard write must be done before we read it back
+  const system = await window.hearth.files.clipHasFiles().catch(() => []);
+  // Our copy/cut is still what the clipboard holds (or it never reached it): paste it here (a cut moves).
+  // Only a clipboard that changed after our write counts as files from Explorer.
+  if (own && (!own.synced || !system.length || sameSet(system, own.paths))) { await transfer(own.paths, dir, own.cut); return; }
+  if (!system.length) return;
+  try { const done = await window.hearth.files.clipPaste(dir); await reloadDirs([dir], dir); FT.sel = new Set(done); repaint(); toast(t('{n} item(s) pasted', { n: done.length })); }
+  catch (err) { toast(errMsg(err)); }
+}
 
 async function trashSelection() {
   const paths = topLevel([...FT.sel].filter((p) => p !== FT.root));
@@ -208,7 +225,7 @@ function treeMenu(e) {
     { label: t('New file'), run: () => createIn(dir, false) }, { label: t('New folder'), run: () => createIn(dir, true) }, '-',
     { label: t('Cut'), key: 'Ctrl+X', disabled: !p || isRoot, run: () => copySelection(true) },
     { label: t('Copy'), key: 'Ctrl+C', disabled: !p || isRoot, run: () => copySelection(false) },
-    { label: t('Paste'), key: 'Ctrl+V', disabled: !FT.clip, run: () => pasteInto(dir) },
+    { label: t('Paste'), key: 'Ctrl+V', run: () => pasteInto(dir) },
     { label: t('Duplicate'), disabled: !p || isRoot, run: async () => { for (const q of topLevel([...FT.sel])) { try { await window.hearth.files.copy(q, dirOf(q)); } catch (err) { toast(errMsg(err)); } } await reloadDirs([...FT.sel].map(dirOf)); } }, '-',
     { label: t('Rename'), key: 'F2', disabled: !p || isRoot, run: renameSelection },
     { label: t('Delete'), key: 'Del', disabled: !p || isRoot, run: trashSelection }, '-',

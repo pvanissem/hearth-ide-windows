@@ -8,6 +8,7 @@
   const DEF = {
     sessions: ['inbox', 'Sessions'], agent: ['sparkles', 'Agent'], editor: ['file-code', 'Editor'], files: ['folder', 'Files'], git: ['git-branch', 'Git'],
     overview: ['tree', 'Overview'], tests: ['flask', 'Tests'], arch: ['workflow', 'Architecture'], build: ['wrench', 'Build'], ci: ['activity', 'CI/CD'],
+    specs: ['spec', 'Specs'], hooks: ['zap', 'Agent Hooks'],
   };
   const FONT_VIEWS = new Set(['agent', 'editor']);   // these scale their font, the others use CSS zoom
 
@@ -23,9 +24,21 @@
   const title = (v) => t(DEF[v][1]);
 
   function load() {
-    try { const raw = JSON.parse(localStorage.getItem(KEY)); const ok = raw && M.sanitize(raw); if (ok) return ok; } catch { /* first start or private mode */ }
+    try {
+      const raw = JSON.parse(localStorage.getItem(KEY)); let ok = raw && M.sanitize(raw);
+      // A layout saved before Specs and Agent Hooks existed: add them next to Git once, without changing the active tabs.
+      if (ok && localStorage.getItem('hearth.layout.views') !== '2') {
+        for (const v of ['specs', 'hooks']) if (!M.groupOf(ok, v)) { const g = M.groupOf(ok, 'git') || M.groups(ok)[0]; const keep = g.active; ok = M.showView(ok, v, g.id); M.groupOf(ok, v).active = keep; }
+        localStorage.setItem('hearth.layout.views', '2');
+      }
+      if (ok) return ok;
+    } catch { /* first start or private mode */ }
     return M.defaultLayout();
   }
+  // ---------- saved layouts (name -> tree), kept across restarts ----------
+  const SAVED = 'hearth.layouts.saved';
+  const savedLayouts = () => { try { const v = JSON.parse(localStorage.getItem(SAVED)); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+  const writeSaved = (m) => { try { localStorage.setItem(SAVED, JSON.stringify(m)); } catch { /* private mode */ } };
   function save() { try { localStorage.setItem(KEY, JSON.stringify(tree)); } catch { /* private mode */ } }
   function set(next, { keepMax = false } = {}) { tree = next; if (!keepMax && maximized && !M.findById(tree, maximized)) maximized = null; save(); render(); }
 
@@ -223,11 +236,30 @@
       render();
       document.addEventListener('hearth:lang', render);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && maximized) { maximized = null; render(); } });
+      document.getElementById('btn-layout')?.addEventListener('click', (e) => api.openMenu(e.currentTarget));
     },
     /** Show a view (and make it the active tab of its pane). */
     show(view) { set(M.showView(tree, view)); },
     hide(view) { set(M.hideView(tree, view)); },
     reset() { maximized = null; set(M.defaultLayout()); },
+    preset(name) { const f = M.PRESETS[name]; if (f) { maximized = null; set(f()); } },
+    saved: () => Object.keys(savedLayouts()).sort((a, b) => a.localeCompare(b)),
+    save(name) { name = String(name || '').trim().slice(0, 60); if (!name) return false; const m = savedLayouts(); m[name] = M.clone(tree); writeSaved(m); return true; },
+    restore(name) { const raw = savedLayouts()[name]; const ok = raw && M.sanitize(raw); if (ok) { maximized = null; set(ok); return true; } return false; },
+    forget(name) { const m = savedLayouts(); delete m[name]; writeSaved(m); },
+    menu: (anchor, items) => popMenu(anchor, items),
+    /** The Layout menu: presets, own layouts, save the current one, delete one. */
+    openMenu(anchor) {
+      const own = api.saved();
+      popMenu(anchor, [
+        { label: t('Standard'), icon: 'layout', run: () => api.preset('standard') },
+        { label: t('Spec-driven'), icon: 'spec', run: () => api.preset('spec') },
+        ...(own.length ? ['-', ...own.map((n) => ({ label: n, icon: 'board', run: () => api.restore(n) }))] : []),
+        '-', { label: t('Save current layout...'), icon: 'save', run: () => { const n = prompt(t('Name of the layout')); if (n && n.trim()) { if (own.includes(n.trim()) && !confirm(t('Replace the layout "{name}"?', { name: n.trim() }))) return; api.save(n); toast(t('Layout saved')); } } },
+        ...(own.length ? [{ label: t('Delete saved layout'), icon: 'trash', run: () => setTimeout(() => popMenu(anchor, own.map((n) => ({ label: n, icon: 'x', run: () => api.forget(n) }))), 0) }] : []),
+        { label: t('Reset layout'), icon: 'undo', run: () => api.reset() }]);
+    },
+    title,
     badge(view, text) {
       badges.set(view, text || '');
       for (const b of document.querySelectorAll(`.gtab[data-view-tab="${view}"] .bdg`)) b.textContent = text || '';

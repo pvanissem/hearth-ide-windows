@@ -72,4 +72,22 @@ async function create(dir, name, isDir) {
   return target;
 }
 
-module.exports = { copyInto, moveInto, rename, create, uniquePath, checkName, inside };
+// ---- the Windows clipboard as a file list (Explorer copy/paste in both directions) ----
+const { execFile } = require('node:child_process');
+const ps = (script, env = {}) => new Promise((resolve, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-Command', script],
+  { windowsHide: true, timeout: 15000, env: { ...process.env, ...env }, maxBuffer: 4 * 1024 * 1024 }, (err, out) => (err ? reject(err) : resolve(String(out)))));
+
+/** Files Explorer put on the clipboard (CF_HDROP). */
+async function clipboardFiles() {
+  if (process.platform !== 'win32') return [];
+  const out = await ps('[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f=[System.Windows.Forms.Clipboard]::GetFileDropList(); foreach($x in $f){ $x }').catch(() => '');
+  return out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && path.isAbsolute(s));
+}
+/** Put files on the clipboard so Explorer can paste them. The paths go through the environment, not the script text. */
+async function setClipboardFiles(paths) {
+  if (process.platform !== 'win32' || !paths.length) return;
+  await ps('Add-Type -AssemblyName System.Windows.Forms; $c=New-Object System.Collections.Specialized.StringCollection; foreach($p in ($env:HEARTH_CLIP -split "`n")){ if($p){ [void]$c.Add($p) } }; [System.Windows.Forms.Clipboard]::SetFileDropList($c)',
+    { HEARTH_CLIP: paths.map((p) => path.resolve(p)).join('\n') });
+}
+
+module.exports = { copyInto, moveInto, rename, create, uniquePath, checkName, inside, clipboardFiles, setClipboardFiles };

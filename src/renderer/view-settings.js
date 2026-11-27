@@ -58,7 +58,15 @@
   }
   $('#btn-settings').addEventListener('click', open);
 
+  /** Rules apply at the start of a process: restart waiting agents now, working ones after their turn (nothing is lost). */
+  window.restartSessions = async () => {
+    const r = await window.hearth.restartAll();
+    toast(r.later ? t('{now} restarted now, {later} after their current turn.', r) : t('{now} sessions restarted.', r));
+  };
+  $('#btn-restart-sessions')?.addEventListener('click', (e) => { e.preventDefault(); window.restartSessions(); });
+  const RULES = ['journal', 'domains', 'ports', 'folders', 'network', 'gitSSH', 'backend', 'allowUnsandboxed'];
   $('#btn-save-settings').addEventListener('click', async () => {
+    const before = JSON.stringify(RULES.map((k) => state.settings?.[k]));
     await save({
       language: $('#set-language').value, theme: $('#set-theme').value, journal: $('#set-journal').checked,
       domains: $('#set-domains').value.split(/\s+/).filter(Boolean), ports: $('#set-ports').value.split(/[,\s]+/).filter(Boolean).map(Number),
@@ -66,6 +74,8 @@
       allowUnsandboxed: $('#set-unsandboxed').checked,
     });
     showSandboxState();
+    const running = [...state.sessions.values()].filter((s) => !s.exited && !s.login).length;
+    if (running && before !== JSON.stringify(RULES.map((k) => state.settings?.[k])) && confirm(t('The new rules apply to agents started from now on. Restart the {n} running sessions? Waiting agents restart now, working ones after their current turn.', { n: running }))) window.restartSessions();
   });
   // Closing without saving restores the saved theme/language
   $('#dlg-settings').addEventListener('close', () => { if (state.settings) { Themes.apply(state.settings.theme); I18n.set(state.settings.language); renderInbox(); showSandboxState(); } });

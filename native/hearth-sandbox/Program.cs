@@ -222,33 +222,69 @@ static class Program
     {
         string file = Environment.GetEnvironmentVariable("HEARTH_JOURNAL");
         if (string.IsNullOrEmpty(file)) { Console.Error.WriteLine("hearth-journal: not inside a Hearth session"); return 2; }
-        if (a.Length < 3 || (a[1] != "step" && a[1] != "decision" && a[1] != "question"))
-        { Console.Error.WriteLine("usage: hearth-journal step|decision|question <id> [--parent ID] [--title T] [--status S] [--why T] [--rejected T]... [--answer T]"); return 2; }
-        var json = new StringBuilder("{\"t\":" + JsonString(a[1]) + ",\"id\":" + JsonString(a[2]));
-        var rejected = new List<string>();
-        for (int i = 3; i + 1 < a.Length; i += 2)
+        const string usage = "usage: hearth-journal step|decision|question <id> [options] [+ step|decision|question <id> [options]]...";
+        // Several entries in one call, separated by "+": every call is a tool call of the agent. Nothing is written unless all are valid.
+        var outText = new StringBuilder();
+        int i = 1;
+        if (a.Length < 3) { Console.Error.WriteLine(usage); return 2; }
+        while (i < a.Length)
         {
-            switch (a[i])
+            if (i + 1 >= a.Length || (a[i] != "step" && a[i] != "decision" && a[i] != "question") || a[i + 1] == "+")
+            { Console.Error.WriteLine(usage); return 2; }
+            var json = new StringBuilder("{\"t\":" + JsonString(a[i]) + ",\"id\":" + JsonString(a[i + 1]));
+            var rejected = new List<string>();
+            i += 2;
+            while (i < a.Length && a[i] != "+")
             {
-                case "--parent": json.Append(",\"parent\":" + JsonString(a[i + 1])); break;
-                case "--title": json.Append(",\"title\":" + JsonString(a[i + 1])); break;
-                case "--status": json.Append(",\"status\":" + JsonString(a[i + 1])); break;
-                case "--why": json.Append(",\"why\":" + JsonString(a[i + 1])); break;
-                case "--answer": json.Append(",\"answer\":" + JsonString(a[i + 1])); break;
-                case "--rejected": rejected.Add(JsonString(a[i + 1])); break;
-                default: Console.Error.WriteLine("unknown option " + a[i]); return 2;
+                if (i + 1 >= a.Length) { Console.Error.WriteLine("missing value for " + a[i]); return 2; }
+                switch (a[i])
+                {
+                    case "--parent": json.Append(",\"parent\":" + JsonString(a[i + 1])); break;
+                    case "--title": json.Append(",\"title\":" + JsonString(a[i + 1])); break;
+                    case "--status": json.Append(",\"status\":" + JsonString(a[i + 1])); break;
+                    case "--why": json.Append(",\"why\":" + JsonString(a[i + 1])); break;
+                    case "--answer": json.Append(",\"answer\":" + JsonString(a[i + 1])); break;
+                    case "--rejected": rejected.Add(JsonString(a[i + 1])); break;
+                    default: Console.Error.WriteLine("unknown option " + a[i]); return 2;
+                }
+                i += 2;
             }
+            if (i < a.Length) i++;   // the "+"
+            if (rejected.Count > 0) json.Append(",\"rejected\":[" + string.Join(",", rejected.ToArray()) + "]");
+            outText.Append(json).Append("}\n");
         }
-        if (rejected.Count > 0) json.Append(",\"rejected\":[" + string.Join(",", rejected.ToArray()) + "]");
-        json.Append("}\n");
+        AppendText(file, outText.ToString());
+        return 0;
+    }
+
+    static void AppendText(string file, string text)
+    {
         using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
-        { var bytes = new UTF8Encoding(false).GetBytes(json.ToString()); fs.Write(bytes, 0, bytes.Length); }
+        { var bytes = new UTF8Encoding(false).GetBytes(text); fs.Write(bytes, 0, bytes.Length); }
+    }
+
+    // hearth-sandbox event [json]: status hooks of an agent (Claude Code hooks give the event on stdin, Codex notify as the
+    // last argument). Appends it as one line to events.jsonl next to this exe's folder (<run>\bin\..). Always exits 0:
+    // a failing hook must never disturb the agent.
+    static int EventMain(string[] a)
+    {
+        try
+        {
+            string text = a.Length > 1 ? a[a.Length - 1] : Console.In.ReadToEnd();
+            if (text.Length > 256 * 1024) return 0;
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            if (text.Length == 0) return 0;
+            string bin = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            AppendText(Path.Combine(Path.GetDirectoryName(bin), "events.jsonl"), text + "\n");
+        }
+        catch { }
         return 0;
     }
 
     static int Main(string[] args)
     {
         if (args.Length > 0 && args[0] == "journal") return JournalMain(args);
+        if (args.Length > 0 && args[0] == "event") return EventMain(args);
         Options o;
         try { o = Parse(args); } catch (Exception e) { return Fail(e.Message); }
         // The gate comes FIRST, before the container profile is opened: a clean-up of the previous session deletes that
