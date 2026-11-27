@@ -5,7 +5,7 @@
 param([switch]$Packaged)   # -Packaged: test dist\win-unpacked\Hearth IDE.exe (after "npx electron-builder --win --dir") instead of the dev app
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-& (Join-Path $PSScriptRoot 'build-native.ps1') | Out-Null
+node (Join-Path $PSScriptRoot 'build-native.js') | Out-Null
 $tmp = Join-Path $env:TEMP 'hearth-smoke'
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force "$tmp\secret", "$tmp\outside" | Out-Null

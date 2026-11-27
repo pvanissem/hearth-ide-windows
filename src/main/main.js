@@ -50,6 +50,7 @@ const leases = new Leases({
 // when a project contains the app itself): undo them before anything else.
 leases.recover({ sync: true });
 
+const APP_ID = 'io.github.pvanissem.hearth-windows';   // = build.appId: taskbar grouping and the installer's shortcut
 const send = (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); };
 const plainError = (e) => String((e && e.message) || e);
 
@@ -80,6 +81,12 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   win.setMenuBarVisibility(false);
+  // The taskbar button takes its icon from the program that runs (electron.exe while developing) unless the window
+  // names its own: the .ico from the source tree, or the app's .exe once packaged (Windows cannot read inside app.asar).
+  if (process.platform === 'win32') {
+    const appIconPath = app.isPackaged ? process.execPath : path.join(__dirname, '..', 'renderer', 'assets', 'icon.ico');
+    try { win.setAppDetails({ appId: APP_ID, appIconPath, appIconIndex: 0, relaunchDisplayName: 'Hearth IDE' }); } catch { /* older Windows */ }
+  }
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -508,7 +515,7 @@ async function smoke() {
   app.exit(0);
 }
 
-app.setAppUserModelId('io.github.pvanissem.hearth-windows');
+app.setAppUserModelId(APP_ID);
 app.whenReady().then(() => { createWindow(); if (process.env.HEARTH_SMOKE) smoke(); });
 
 // Leave no AppContainer grants behind, also when the app is closed or killed by a smoke test.

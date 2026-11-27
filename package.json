@@ -7,8 +7,8 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "prestart": "powershell -NoProfile -File scripts/build-native.ps1",
-    "build:native": "powershell -NoProfile -File scripts/build-native.ps1",
+    "prestart": "node scripts/build-native.js",
+    "build:native": "node scripts/build-native.js",
     "test": "node --test \"test/*.test.js\"",
     "smoke": "powershell -NoProfile -File scripts/smoke.ps1",
     "smoke:features": "powershell -NoProfile -File scripts/smoke-features.ps1",
