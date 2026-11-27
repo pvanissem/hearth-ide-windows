@@ -505,6 +505,14 @@ async function smoke() {
     fs.writeFileSync(file, (await win.webContents.capturePage()).toPNG());
     return file;
   });
+  // Screenshots for the landing page: window size, a region as PNG data URL, a file written next to HEARTH_SHOT.
+  ipcMain.handle('smoke:size', (_e, w, h) => { win.setContentSize(Math.round(w), Math.round(h)); });
+  ipcMain.handle('smoke:capture', async (_e, rect) => (await win.webContents.capturePage(rect || undefined)).toDataURL());
+  ipcMain.handle('smoke:save', (_e, name, dataUrl) => {
+    const file = path.join(path.dirname(process.env.HEARTH_SHOT), String(name).replace(/[^\w.-]/g, '_'));
+    fs.writeFileSync(file, Buffer.from(String(dataUrl).replace(/^data:[^,]+,/, ''), 'base64'));
+    return file;
+  });
   for (const dir of (process.env.HEARTH_SMOKE_DIR || '').split(path.delimiter).filter(Boolean)) workspaces.add(path.resolve(dir));
   await new Promise((r) => win.webContents.once('did-finish-load', r));
   let out;

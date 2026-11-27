@@ -1,6 +1,10 @@
 # Hearth IDE for Windows
 
-Windows companion to [Hearth IDE](https://github.com/pvanissem/hearth-ide) (native macOS/SwiftUI).
+Windows companion to [Hearth IDE](https://github.com/botgarten/hearth-ide) (native macOS/SwiftUI).
+Website: <https://pvanissem.github.io/hearth-ide-windows/> · Deutsch: <https://pvanissem.github.io/hearth-ide-windows/de/>
+
+Install (PowerShell): `irm https://pvanissem.github.io/hearth-ide-windows/install.ps1 | iex` – downloads the latest installer,
+checks its SHA-512 checksum and runs it. Not code-signed yet: with Smart App Control on, Windows blocks it.
 The macOS app cannot be compiled for Windows (SwiftUI, AppKit, Seatbelt and the Keychain are macOS-only),
 so this is a separate Electron client with the same ideas: every agent runs in a sandbox, one inbox shows
 what each of them needs, and next to the terminal you get files, Git, an overview of the agent's work, tests,

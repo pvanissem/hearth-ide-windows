@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth IDE für Windows – Dein Agent. Dein Plan. Unser Feuerring.</title>
+<meta name="description" content="Hearth IDE für Windows startet Claude Code, Codex, GitHub Copilot CLI, OpenCode und Gemini CLI in einer Windows-AppContainer-Sandbox – mit einer Inbox für alle Sitzungen. Ohne WSL, ohne Adminrechte.">
+<meta property="og:title" content="Hearth IDE für Windows">
+<meta property="og:description" content="Dein Agent. Dein Plan. Unser Feuerring. Jede Agent-CLI in einer Sandbox auf deinem Windows-PC.">
+<meta property="og:image" content="https://pvanissem.github.io/hearth-ide-windows/assets/hearth-app.webp">
+<meta property="og:locale" content="de_DE">
+<meta name="theme-color" content="#0e0a12">
+<link rel="canonical" href="https://pvanissem.github.io/hearth-ide-windows/de/">
+<link rel="alternate" hreflang="en" href="https://pvanissem.github.io/hearth-ide-windows/">
+<link rel="alternate" hreflang="de" href="https://pvanissem.github.io/hearth-ide-windows/de/">
+<link rel="alternate" hreflang="x-default" href="https://pvanissem.github.io/hearth-ide-windows/">
+<link rel="icon" type="image/png" href="../assets/favicon.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="preload" href="../assets/fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/fonts.css?v=dev">
+<link rel="stylesheet" href="../assets/site.css?v=dev">
+</head>
+<body>
+<div class="wrap">
+  <div class="firelight hero-light" aria-hidden="true"></div>
+  <header class="top">
+    <a class="mark" href="./" aria-label="Hearth IDE für Windows – Startseite">
+      <img src="../assets/hearth-icon.webp" alt="" width="36" height="36">
+      Hearth IDE <span class="version">Windows · v0.3</span>
+    </a>
+    <nav aria-label="Abschnitte">
+      <a href="#specs">Specs &amp; Hooks</a>
+      <a href="#ring">Was geblockt wird</a>
+      <a href="#agents">Agenten</a>
+      <a href="#how">So geht’s</a>
+      <a class="gh" href="https://github.com/pvanissem/hearth-ide-windows">GitHub</a>
+      <a class="lang" href="../" hreflang="en" lang="en">English</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="pitch">
+        <a class="news" href="#specs"><span class="chip">Neu</span> Specs, Agent Hooks und Pull-Request-Review unter Windows <span aria-hidden="true">→</span></a>
+        <h1>Dein Agent. Dein Plan. <span class="lit">Unser Feuerring.</span></h1>
+        <p class="lede"><strong>Claude Code, Codex, Copilot &amp; Co.</strong> laufen auf deinem Windows-PC wie gewohnt – nur in einer Sandbox, die deine Schlüssel und den Rest deines Profils draußen hält. Ohne WSL, ohne Adminrechte. Und Hearth führt sie von der Spec bis zum fertigen Code.</p>
+
+        <div class="install" data-install>
+          <code><span class="prompt">PS&gt;</span><span data-cmd>irm https://<wbr>pvanissem.github.io/<wbr>hearth-ide-windows/<wbr>install.ps1 <wbr>| iex</span></code>
+          <button class="copy" type="button" data-copy aria-label="Installationsbefehl kopieren">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6.5" y="6.5" width="10" height="10" rx="2"/><path d="M13.5 6.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v7A1.5 1.5 0 0 0 5 13.5h1.5"/></svg>
+            <span class="copy-text">Kopieren</span>
+          </button>
+          <span class="copy-status" role="status" aria-live="polite"></span>
+        </div>
+
+        <p class="side-note">Noch nicht signiert: Ist die <strong>intelligente App-Steuerung</strong> (Smart App Control) eingeschaltet, blockiert Windows den Installer und den Sandbox-Helper. Signierte Builds kommen als Nächstes.</p>
+
+        <ul class="facts" aria-label="Eckdaten">
+          <li><b>v0.3</b> frühe Version</li>
+          <li>Windows <b>10 / 11</b></li>
+          <li><b>x64</b></li>
+          <li>Lizenz <b>MIT</b></li>
+          <li>Sandbox <b>AppContainer</b></li>
+        </ul>
+
+        <div class="pitch-links">
+          <a href="https://github.com/pvanissem/hearth-ide-windows/releases/latest">Installer herunterladen</a>
+          <a href="#ring">Was der Ring blockt</a>
+          <a href="https://botgarten.github.io/hearth-ide/de/">Auf dem Mac?</a>
+        </div>
+      </div>
+
+      <div class="ring" data-ring aria-label="Ein Steinkreis aus Sandbox-Regeln um das Feuer des Agenten. Jeder Stein ist eine Sperre.">
+        <svg class="stones back" data-stones-back viewBox="0 0 1000 860" aria-hidden="true"></svg>
+        <canvas data-fire aria-hidden="true"></canvas>
+        <svg class="stones front" data-stones viewBox="0 0 1000 860" aria-hidden="true"></svg>
+        <ul class="sr-only" data-rules aria-label="Sandbox-Regeln um den Agenten"></ul>
+        <div class="agent-name" data-agent aria-hidden="true">claude</div>
+        <div class="inside-label"><code>C:\dein-projekt</code><span>lesen + schreiben</span></div>
+        <div class="rule-tip" data-tip aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <section id="specs" class="specs" aria-labelledby="specs-h">
+      <div class="ember-light" style="right:-18rem;top:3rem" aria-hidden="true"></div>
+      <p class="eyebrow">Neu in v0.3 · Spec-getriebene Entwicklung</p>
+      <h2 id="specs-h">Erst die Spec. <span class="lit">Dann der Code.</span></h2>
+      <p class="section-lede">Hearth bringt deinen Agenten in vier Schritten von der Idee zum fertigen Code. Jeder Schritt ist ein Dokument, das du liest und freigibst, bevor der nächste startet. Geführt, wenn du einen Coach willst – frei, wenn du den Weg kennst.</p>
+
+      <ol class="journey" data-phases>
+        <li><span class="node" aria-hidden="true"></span><span class="file">requirements.md</span><h3>Anforderungen</h3><p>User Stories und Akzeptanzkriterien in EARS: <code>WHEN … THEN the system SHALL …</code></p><span class="gate">du gibst frei</span></li>
+        <li><span class="node" aria-hidden="true"></span><span class="file">design.md</span><h3>Design</h3><p>Architektur, Schnittstellen, Daten, Fehler und Tests – auf Basis der freigegebenen Anforderungen.</p><span class="gate">du gibst frei</span></li>
+        <li><span class="node" aria-hidden="true"></span><span class="file">tasks.md</span><h3>Aufgaben</h3><p>Kleine Umsetzungsschritte, jeder mit den Kriterien, die er erfüllt.</p><span class="gate">du gibst frei</span></li>
+        <li><span class="node" aria-hidden="true"></span><span class="file">▶ Aufgabe starten</span><h3>Umsetzung</h3><p>Eine Aufgabe nach der anderen, abgehakt, sobald sie steht, und am Ende gegen jedes Kriterium geprüft.</p></li>
+      </ol>
+
+      <div class="spec-duo">
+        <figure class="shot">
+          <div class="shot-frame">
+            <img src="../assets/spec-review.webp" width="1219" height="1050" loading="lazy" decoding="async"
+                 alt="Geführter Spec-Modus, Schritt 1: Die Qualitätsprüfung meldet ein nicht testbares Kriterium und zwei offene Fragen, jeweils mit einem Knopf für den Agenten, darunter die Anforderungen und eine Checkliste.">
+            <span class="pin q">Qualitätsprüfung</span>
+            <span class="pin doc">Lesen, überarbeiten, freigeben</span>
+          </div>
+          <figcaption>Durchsicht: Hearth prüft jedes Dokument, bevor du es freigibst.</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot-frame">
+            <img src="../assets/spec-build.webp" width="1219" height="1050" loading="lazy" decoding="async"
+                 alt="Geführter Spec-Modus, Schritt 4: alle Dokumente freigegeben, ein Fortschrittsring bei einer von drei Aufgaben, die nächste Aufgabe mit Start-Knopf, die Aufgabenliste und die Abdeckung jedes Akzeptanzkriteriums.">
+            <span class="pin prog">Fortschritt &amp; Abdeckung</span>
+            <span class="pin next">Als Nächstes</span>
+          </div>
+          <figcaption>Umsetzung: die nächste Aufgabe, der Fortschritt und welche Kriterien schon erfüllt sind.</figcaption>
+        </figure>
+      </div>
+
+      <h3 class="edges-title">Was es zu mehr als einer Vorlage macht.</h3>
+      <ul class="roster edges">
+        <li><span class="who">Qualitätsprüfung</span><span class="login">Nicht testbare Kriterien, fehlende Stories, offene Fragen, Anforderungen ohne Aufgabe. Jeder Befund mit „Vom Agenten beheben lassen“.</span></li>
+        <li><span class="who">Abdeckung</span><span class="login">Jedes Akzeptanzkriterium mit den Aufgaben, die es umsetzen – von geplant bis erledigt.</span></li>
+        <li><span class="who">Erst fragen</span><span class="login">Der Agent liest deinen Code und stellt bis zu fünf Rückfragen, bevor er eine Zeile schreibt.</span></li>
+        <li><span class="who">Drei Arten</span><span class="login">Feature, Bugfix mit Regressionsschutz, Refactoring mit dem, was sich nicht ändern darf.</span></li>
+        <li><span class="who">Geführt oder frei</span><span class="login">Ein Coach mit Checklisten oder alle Dokumente auf einmal. Jederzeit umschaltbar.</span></li>
+        <li><span class="who">Dein Agent</span><span class="login">Claude Code, Codex, Copilot, OpenCode oder Gemini, in der Sandbox. Specs sind Markdown in deinem Repo, <code>.kiro/specs</code> funktioniert auch.</span></li>
+      </ul>
+
+      <h3 class="hooks-title">Agent Hooks hüten das Feuer.</h3>
+      <p class="hooks-lede">Endet ein Durchgang, schaut Hearth, was der Agent geändert hat, und führt deine Hooks aus: ein Auftrag an den Agenten oder ein Befehl in der Sandbox.</p>
+      <ul class="hooks">
+        <li><span class="when">Agent speichert <code>\.cs$</code></span><span class="then">„Passe die Tests für diese Dateien an und führe sie aus.“</span></li>
+        <li><span class="when">Agent speichert <code>\.tsx?$</code></span><span class="then"><code>npm run lint</code> in der Sandbox. Schlägt es fehl, bekommt der Agent die Ausgabe.</span></li>
+        <li><span class="when">Agent beendet seinen Durchgang</span><span class="then">„Prüfe deinen Diff auf Fehler, fehlende Tests und Reste.“</span></li>
+        <li><span class="when">Agent ändert <code>requirements.md</code></span><span class="then">„Bring Design und Aufgaben wieder in Einklang.“</span></li>
+      </ul>
+      <p class="side-note">Hooks können sich nicht aufschaukeln: Ein Durchgang, den ein Hook gestartet hat, löst keine Hooks aus. Eine Hook-Datei aus dem Repository oder vom Agenten läuft erst, wenn du genau diesen Inhalt erlaubt hast. Kiros <code>.kiro/hooks</code> werden mitgelesen.</p>
+    </section>
+
+    <section id="ring" aria-labelledby="ring-h">
+      <div class="ember-light" style="left:-18rem;top:2rem" aria-hidden="true"></div>
+      <h2 id="ring-h">Was im Ring bleibt.</h2>
+      <p class="section-lede">Hearth startet jeden Agenten als Windows-<strong>AppContainer</strong>-Prozess – die Isolation, die auch Chromium und Store-Apps nutzen. Nichts zu installieren, kein WSL, keine Adminrechte. Im Ring arbeitet er frei:</p>
+      <ul class="inside">
+        <li><code>C:\dein-projekt</code> lesen und schreiben</li>
+        <li>ein eigenes Home pro Agent, mit seinem Login</li>
+        <li>deine Werkzeuge im <code>PATH</code>, nur lesend</li>
+        <li><strong>das Internet</strong> – oder gar nichts im Offline-Modus</li>
+      </ul>
+      <h3 class="outside-title">Bleibt draußen:</h3>
+      <ul class="arc" data-arc>
+        <li style="--lift:1.4" data-stone="~\.ssh"><p>SSH-Schlüssel</p></li>
+        <li style="--lift:.5" data-stone="$PROFILE"><p>Shell-Konfiguration</p></li>
+        <li style="--lift:0" data-stone="~\.aws"><p>Cloud-Zugangsdaten</p></li>
+        <li style="--lift:0" data-stone="Browserdaten"><p>Cookies, Passwörter, Sitzungen</p></li>
+        <li style="--lift:.5" data-stone="~\Documents"><p>der Rest deines Profils</p></li>
+        <li style="--lift:1.4" data-stone=".git\hooks"><p>für den Agenten schreibgeschützt</p></li>
+      </ul>
+      <p class="side-note">Ehrliche Grenzen: Windows lässt einen AppContainer nur ganz oder gar nicht ins Internet, eine Liste erlaubter Domains wie auf dem Mac gibt es daher nicht. API-Schlüssel, die du für Agenten hinterlegst, sind für sie sichtbar. Git läuft auf deinem PC, mit ausgeschalteten Hooks.</p>
+    </section>
+
+    <section id="agents" aria-labelledby="agents-h">
+      <h2 id="agents-h">Deine Agenten, deine Logins.</h2>
+      <p class="section-lede">Hearth bringt kein eigenes Modell mit. Es hält die Agenten im Zaum, für die du schon bezahlst.</p>
+      <ul class="roster">
+        <li><span class="who">Claude Code</span><span class="login">dein Claude-Abo, über die offizielle CLI</span><span class="how">Status in der Inbox über Hooks</span></li>
+        <li><span class="who">Codex</span><span class="login">ChatGPT-Login oder API-Key</span><span class="how">Status über notify</span></li>
+        <li><span class="who">GitHub Copilot CLI</span><span class="login">dein GitHub-Konto</span><span class="how">im Terminal-Chat</span></li>
+        <li><span class="who">OpenCode</span><span class="login">jeder Anbieter, den OpenCode kennt</span><span class="how">im Terminal-Chat</span></li>
+        <li><span class="who">Gemini CLI</span><span class="login">dein Google-Konto</span><span class="how">im Terminal-Chat</span></li>
+      </ul>
+      <p class="side-note">Jedes Programm im Terminal kann seinen Zustand selbst melden, mit dem Program Status Protocol (OSC 7501): arbeitet, blockiert, fertig – samt Fortschritt.</p>
+    </section>
+
+    <section id="how" aria-labelledby="how-h">
+      <div class="ember-light" style="right:-16rem;top:6rem" aria-hidden="true"></div>
+      <h2 id="how-h">In drei Zügen entfacht.</h2>
+      <p class="section-lede">Kein Konto, keine Konfiguration. Hearth bringt die Sandbox, du bringst deine Agenten.</p>
+      <ol class="strokes" data-strokes>
+        <li><span class="n" aria-hidden="true">1</span><h3>Installieren</h3><p>Der Befehl oben lädt den Installer des neuesten Release, prüft seine SHA-512-Prüfsumme und installiert Hearth in dein Benutzerprofil. Nochmal ausführen aktualisiert.</p></li>
+        <li><span class="n" aria-hidden="true">2</span><h3>Ordner wählen</h3><p>Dein Projektordner ist das Innere des Rings: der einzige Ort, an dem der Agent schreiben darf. Oder lass Hearth ein Repository klonen.</p></li>
+        <li><span class="n" aria-hidden="true">3</span><h3>Agent starten</h3><p>Claude Code, Codex, Copilot, OpenCode oder Gemini – mit deinem Login, Modell und Aufwand, im Terminal des Chatbereichs.</p></li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="app-h">
+      <h2 id="app-h">Jedes Feuer in einem Fenster.</h2>
+      <p class="section-lede">Eine Inbox – als Liste oder Board – zeigt, welcher Agent arbeitet, wartet oder fertig ist, und wie lange schon. Daneben: Dateien, Git mit Pull-Request-Review, Editor, Specs, Tests und Builds – die ebenfalls in der Sandbox laufen.</p>
+      <figure class="shot">
+        <div class="shot-frame">
+          <picture>
+            <source media="(max-width: 560px)" srcset="../assets/hearth-app-phone.webp" width="1100" height="990">
+            <img src="../assets/hearth-app.webp" width="1760" height="990" loading="lazy" decoding="async"
+                 alt="Hearth IDE für Windows: links die Inbox mit einer fertigen Sitzung, daneben der Terminal-Chat mit Sandbox-Abzeichen und grünen Tests, rechts Git mit den zwei geänderten Dateien.">
+          </picture>
+          <span class="pin inbox">Inbox</span>
+          <span class="pin chat">Terminal-Chat<span class="long"> in der Sandbox</span></span>
+          <span class="pin inspector">Git folgt dem Agenten</span>
+        </div>
+        <figcaption>Ein echter Screenshot mit dem Demo-Projekt „campfire-demo“: eine Funktion farewell() samt Tests, in der Sandbox.</figcaption>
+      </figure>
+    </section>
+
+    <section aria-labelledby="status-h">
+      <h2 id="status-h">Ehrlicher Stand: v0.3.</h2>
+      <p class="section-lede">Früh, aber benutzbar – und auf dem Stand der Mac-Version 0.16. Das funktioniert heute:</p>
+      <div class="status">
+        <div>
+          <h3>Funktioniert</h3>
+          <ul>
+            <li>Agenten als Terminal im Chatbereich</li>
+            <li>Geführter Spec-Modus mit Qualitätsprüfung und Abdeckung</li>
+            <li>Agent Hooks, kompatibel mit Kiro</li>
+            <li>Inbox und Board mit Status, Timern und Benachrichtigungen</li>
+            <li>Git: Pull Requests reviewen, kommentieren und mergen</li>
+            <li>Commit-Nachrichten von deinem Agenten</li>
+            <li>Build &amp; Deployment und Tests in der Sandbox</li>
+            <li>Sitzung fortsetzen oder neu starten</li>
+            <li>CI/CD für GitLab und GitHub Actions</li>
+            <li>Deutsch und Englisch</li>
+            <li>Überall suchen mit doppeltem Shift</li>
+            <li>Themes: Hearth Light, Darcula, Storm</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Als Nächstes</h3>
+          <ul>
+            <li>Signierte Builds (die intelligente App-Steuerung kann den unsignierten Sandbox-Helper heute blockieren)</li>
+            <li>Nativer Chat über das Agent Client Protocol</li>
+            <li>Bereiche in eigenen Fenstern</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Voraussetzungen</h3>
+          <ul>
+            <li>Windows 10 oder 11, x64</li>
+            <li>mindestens eine Agent-CLI im <code>PATH</code></li>
+            <li>Git für den Git-Bereich</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="close" aria-labelledby="close-h">
+      <div class="embers"><img src="../assets/hearth-icon.webp" alt="" width="96" height="96" loading="lazy"></div>
+      <h2 id="close-h">Feuer frei.</h2>
+      <div class="install" data-install>
+        <code><span class="prompt">PS&gt;</span><span data-cmd>irm https://<wbr>pvanissem.github.io/<wbr>hearth-ide-windows/<wbr>install.ps1 <wbr>| iex</span></code>
+        <button class="copy" type="button" data-copy aria-label="Installationsbefehl kopieren">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6.5" y="6.5" width="10" height="10" rx="2"/><path d="M13.5 6.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v7A1.5 1.5 0 0 0 5 13.5h1.5"/></svg>
+          <span class="copy-text">Kopieren</span>
+        </button>
+        <span class="copy-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="pitch-links">
+        <a href="https://github.com/pvanissem/hearth-ide-windows/releases/latest">Installer &amp; Release Notes</a>
+        <a href="https://github.com/pvanissem/hearth-ide-windows/blob/main/site/install.ps1">Was der Befehl tut</a>
+        <a href="https://github.com/pvanissem/hearth-ide-windows">Quellcode</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Hearth IDE für Windows · MIT-Lizenz · kein Konto, keine Telemetrie</span>
+    <span>Die macOS-App: <a href="https://botgarten.github.io/hearth-ide/de/">botgarten.github.io/hearth-ide</a></span>
+  </footer>
+</div>
+
+<script src="../assets/site.js?v=dev"></script>
+</body>
+</html>

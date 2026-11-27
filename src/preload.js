@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('hearth', {
   version: invoke('app:version'),
   open: invoke('app:open'),
   checkUpdate: invoke('app:checkUpdate'),
-  smokeShot: invoke('smoke:shot'),
+  smokeShot: invoke('smoke:shot'), smokeSize: invoke('smoke:size'), smokeCapture: invoke('smoke:capture'), smokeSave: invoke('smoke:save'),
   clipboard: { read: invoke('clip:read'), write: invoke('clip:write') },
   history: { list: invoke('history:list'), forget: (kind, directory) => ipcRenderer.invoke('history:forget', { kind, directory }),
     sessions: (kind, directory) => ipcRenderer.invoke('history:sessions', { kind, directory }), options: invoke('history:options') },
