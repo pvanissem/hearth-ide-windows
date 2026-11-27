@@ -129,4 +129,7 @@ test('settings sanitize rejects junk', () => {
   assert.deepEqual(s.folders, [{ path: 'C:\\a', write: true }]);
   assert.equal(s.language, 'en');
   assert.equal(s.allowUnsandboxed, false);
+  assert.equal(s.autosave, 'off');
+  assert.equal(sanitize({ autosave: 'afterDelay' }).autosave, 'afterDelay');
+  assert.equal(sanitize({ autosave: 'always' }).autosave, 'off');
 });

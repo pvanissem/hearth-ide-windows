@@ -450,7 +450,8 @@ function ensureEditor() {
         wordBasedSuggestions: 'currentDocument', inlayHints: { enabled: 'on' }, occurrencesHighlight: 'singleFile', matchBrackets: 'always', scrollBeyondLastLine: false,
         padding: { top: 6 }, mouseWheelZoom: false, multiCursorModifier: 'alt', dragAndDrop: true, emptySelectionClipboard: true, copyWithSyntaxHighlighting: true, tabSize: 4, detectIndentation: true,
       });
-      state.editor.onDidChangeModelContent(() => { const d = state.docs.get(state.active); if (d && !d.loading) { d.dirty = true; renderDocs(); } });
+      state.editor.onDidChangeModelContent(() => { const d = state.docs.get(state.active); if (d && !d.loading) { d.dirty = true; renderDocs(); scheduleAutosave(state.active); } });
+      state.editor.onDidBlurEditorText(() => { if (autosaveMode() === 'onFocusChange') saveDoc(state.active, true); });
       state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveFile);
       state.editor.addAction({ id: 'hearth.usages', label: t('Find usages'), keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.F7], contextMenuGroupId: 'navigation', contextMenuOrder: 1.5,
         run: (ed) => { const w = ed.getModel().getWordAtPosition(ed.getPosition()); if (w) fire('hearth:usages', { word: w.word, file: state.active }); } });
@@ -487,6 +488,7 @@ function renderDocs() {
 }
 
 function activateDoc(file) {
+  if (state.active && state.active !== file && autosaveMode() !== 'off') saveDoc(state.active, true);
   const prev = state.docs.get(state.active);
   if (prev) prev.view = state.editor.saveViewState();
   const d = state.docs.get(file);
@@ -500,7 +502,9 @@ function activateDoc(file) {
 function closeDoc(file) {
   const d = state.docs.get(file);
   if (!d) return;
+  if (d.dirty && autosaveMode() !== 'off') { saveDoc(file, true).then(() => { if (state.docs.get(file) && !state.docs.get(file).dirty) closeDoc(file); }); return; }
   if (d.dirty && !confirm(t('Discard unsaved changes?'))) return;
+  clearTimeout(d.autoTimer);
   d.model.dispose();
   state.docs.delete(file);
   if (state.active === file) {
@@ -529,12 +533,32 @@ async function openFile(file, line, mark) {
     if (line) { editor.revealLineInCenter(line); editor.setPosition({ lineNumber: line, column: 1 }); editor.focus(); }
   } catch (err) { $('#editor-status').textContent = errMsg(err); }
 }
-async function saveFile() {
-  const d = state.docs.get(state.active);
-  if (!d || !d.dirty) return;
-  try { await window.hearth.write(state.active, d.model.getValue()); d.dirty = false; d.status = `${state.active} - ${t('saved')}`; renderDocs(); fire('hearth:saved', state.active); }
-  catch (err) { alert(errMsg(err)); }
+/** Write one open file. `auto` (autosave): no dialog on errors, the status line shows them instead. */
+async function saveDoc(file, auto = false) {
+  const d = state.docs.get(file);
+  if (!d || !d.dirty || d.saving) return;
+  clearTimeout(d.autoTimer);
+  const version = d.model.getAlternativeVersionId();
+  d.saving = true;
+  try {
+    await window.hearth.write(file, d.model.getValue());
+    if (d.model.isDisposed()) return;
+    d.dirty = d.model.getAlternativeVersionId() !== version;   // typed on while writing: stays modified
+    d.status = `${file} - ${auto ? t('saved automatically') : t('saved')}`; renderDocs(); fire('hearth:saved', file);
+  } catch (err) { if (!auto) alert(errMsg(err)); d.status = errMsg(err); renderDocs(); }
+  finally { d.saving = false; if (d.dirty && auto) scheduleAutosave(file); }
 }
+function saveFile() { return saveDoc(state.active); }
+// ---------- autosave (Settings > General): after a short pause, or when the editor loses focus ----------
+const autosaveMode = () => state.settings?.autosave || 'off';
+function scheduleAutosave(file) {
+  const d = state.docs.get(file);
+  if (!d || autosaveMode() !== 'afterDelay') return;
+  clearTimeout(d.autoTimer);
+  d.autoTimer = setTimeout(() => saveDoc(file, true), 1000);
+}
+function autosaveAll() { if (autosaveMode() !== 'off') for (const file of state.docs.keys()) saveDoc(file, true); }
+window.addEventListener('blur', autosaveAll);
 $('#btn-save').addEventListener('click', saveFile);
 
 // ---------- zoom (Ctrl +/-/0) ----------

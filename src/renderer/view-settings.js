@@ -46,7 +46,7 @@
   async function open() {
     const s = state.settings = await window.hearth.getSettings();
     state.env = await window.hearth.detect(true);
-    $('#set-language').value = s.language; $('#set-theme').value = s.theme; $('#set-journal').checked = s.journal;
+    $('#set-language').value = s.language; $('#set-theme').value = s.theme; $('#set-journal').checked = s.journal; $('#set-autosave').value = s.autosave;
     $('#set-domains').value = s.domains.join('\n'); $('#set-ports').value = s.ports.join(', '); $('#set-folders').value = foldersToText(s.folders);
     $('#set-network').value = s.network; $('#set-ssh').checked = s.gitSSH; $('#set-backend').value = s.backend; $('#set-unsandboxed').checked = s.allowUnsandboxed;
     const e = state.env;
@@ -68,7 +68,7 @@
   $('#btn-save-settings').addEventListener('click', async () => {
     const before = JSON.stringify(RULES.map((k) => state.settings?.[k]));
     await save({
-      language: $('#set-language').value, theme: $('#set-theme').value, journal: $('#set-journal').checked,
+      language: $('#set-language').value, theme: $('#set-theme').value, journal: $('#set-journal').checked, autosave: $('#set-autosave').value,
       domains: $('#set-domains').value.split(/\s+/).filter(Boolean), ports: $('#set-ports').value.split(/[,\s]+/).filter(Boolean).map(Number),
       folders: textToFolders($('#set-folders').value), network: $('#set-network').value, gitSSH: $('#set-ssh').checked, backend: $('#set-backend').value,
       allowUnsandboxed: $('#set-unsandboxed').checked,

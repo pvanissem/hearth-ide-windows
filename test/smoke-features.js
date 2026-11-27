@@ -104,6 +104,22 @@
   r.restart = `${rr.now}/${rr.later}`;
   r.restartedRunning = await until(async () => (await h.sessions())[0]?.status !== 'done' && out.slice(before).join('').includes('restarting'), 10000);
 
+  // ---- editor autosave: off keeps the change in the editor, "after a short pause" writes it, "focus" on blur ----
+  const file = `${PROJECT}${BS}readme.md`;
+  state.settings = await h.setSettings({ ...state.settings, autosave: 'off' });
+  await openFile(file); await wait(300);
+  state.editor.trigger('smoke', 'type', { text: 'X' }); await wait(1500);
+  r.autosaveOffKeeps = !(await h.read(file)).startsWith('X') && state.docs.get(file).dirty;
+  state.settings = await h.setSettings({ ...state.settings, autosave: 'afterDelay' });
+  state.editor.trigger('smoke', 'type', { text: 'Y' });
+  r.autosaveDelay = Boolean(await until(async () => (await h.read(file)).startsWith('XY') && !state.docs.get(file).dirty, 5000));
+  state.settings = await h.setSettings({ ...state.settings, autosave: 'onFocusChange' });
+  state.editor.focus(); state.editor.trigger('smoke', 'type', { text: 'Z' }); await wait(1500);
+  const notYet = !(await h.read(file)).startsWith('XYZ');
+  document.activeElement.blur();
+  r.autosaveFocus = notYet && Boolean(await until(async () => (await h.read(file)).startsWith('XYZ'), 5000));
+  state.settings = await h.setSettings({ ...state.settings, autosave: 'off' });
+
   r.errors = errors.join(' | ');
   $('#view-seg [data-mode="list"]').click();
   return r;

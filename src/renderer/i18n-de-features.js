@@ -116,5 +116,9 @@ I18n.register('de', {
   'Make sure every language has the same keys as the changed translation files. Add missing translations and keep placeholders intact.': 'Sorge dafür, dass jede Sprache dieselben Schlüssel hat wie die geänderten Übersetzungsdateien. Ergänze fehlende Übersetzungen und lass Platzhalter unverändert.',
   'Review your last turn (git diff): look for bugs, missing tests, leftover debug output and unhandled errors. Fix what you find and say briefly what you changed, or that everything is fine.': 'Prüfe deinen letzten Durchgang (git diff): Suche nach Fehlern, fehlenden Tests, übrig gebliebenen Debug-Ausgaben und unbehandelten Fehlern. Behebe, was du findest, und sag kurz, was du geändert hast oder dass alles passt.',
   'These requirements changed. Check design.md and tasks.md of the same spec and update them so they still match; list what you changed.': 'Diese Anforderungen haben sich geändert. Prüfe design.md und tasks.md derselben Spec und passe sie an, damit sie wieder stimmen; nenne, was du geändert hast.',
+  // editor autosave
+  'Auto save': 'Automatisch speichern', 'Off': 'Aus', 'After a short pause (1 s)': 'Nach kurzer Pause (1 s)', 'When the editor loses focus': 'Wenn der Editor den Fokus verliert',
+  'Saves changes in the editor automatically, like VS Code. Ctrl+S always saves.': 'Speichert Änderungen im Editor automatisch, wie VS Code. Strg+S speichert immer.',
+  'saved automatically': 'automatisch gespeichert',
   'Allow this hook file first': 'Erlaube zuerst diese Hook-Datei', 'Unknown hook': 'Unbekannter Hook',
 });
