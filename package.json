@@ -1,6 +1,6 @@
 {
   "name": "hearth-ide-windows",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "author": "Patrick van Issem <p.vanissem91@gmail.com>",
   "description": "Hearth IDE for Windows - sandboxed AI coding agents, inbox, editor and Git in one window",
   "main": "src/main/main.js",
@@ -16,7 +16,7 @@
     "dist": "electron-builder --win --x64"
   },
   "build": {
-    "appId": "io.github.pvanissem.hearth-windows",
+    "appId": "io.github.pvanissem.hearth-ide-windows",
     "productName": "Hearth IDE",
     "files": [
       "src/**",
@@ -42,6 +42,7 @@
       }
     ],
     "nsis": {
+      "guid": "72be583a-0963-58b4-861d-26a58bb9fb32",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",

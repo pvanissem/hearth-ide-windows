@@ -50,7 +50,10 @@ const leases = new Leases({
 // when a project contains the app itself): undo them before anything else.
 leases.recover({ sync: true });
 
-const APP_ID = 'io.github.pvanissem.hearth-windows';   // = build.appId: taskbar grouping and the installer's shortcut
+// = build.appId: taskbar grouping, notifications and the installer's shortcut. Windows remembers the taskbar icon per id,
+// so runs from the source tree (electron.exe) get their own id and never leave the Electron icon on the installed app.
+// (The id changed in 0.3.3 for that reason; build.nsis.guid keeps the old installer identity, so updates replace it.)
+const APP_ID = 'io.github.pvanissem.hearth-ide-windows' + (app.isPackaged ? '' : '.dev');
 const send = (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); };
 const plainError = (e) => String((e && e.message) || e);
 
@@ -85,7 +88,8 @@ function createWindow() {
   // names its own: the .ico from the source tree, or the app's .exe once packaged (Windows cannot read inside app.asar).
   if (process.platform === 'win32') {
     const appIconPath = app.isPackaged ? process.execPath : path.join(__dirname, '..', 'renderer', 'assets', 'icon.ico');
-    try { win.setAppDetails({ appId: APP_ID, appIconPath, appIconIndex: 0, relaunchDisplayName: 'Hearth IDE' }); } catch { /* older Windows */ }
+    const relaunchCommand = app.isPackaged ? `"${process.execPath}"` : undefined;   // Windows only honours the icon together with a command
+    try { win.setAppDetails({ appId: APP_ID, appIconPath, appIconIndex: 0, relaunchDisplayName: 'Hearth IDE', ...(relaunchCommand ? { relaunchCommand } : {}) }); } catch { /* older Windows */ }
   }
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
